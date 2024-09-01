@@ -407,7 +407,7 @@ static void tcg_region_assign(TCGContext *s, size_t curr_region)
     s->code_gen_ptr = start;
     s->code_gen_buffer_size = (char *)end - (char *)start;
 
-    memset(s->code_gen_buffer, 0x00, s->code_gen_buffer_size);
+    //memset(s->code_gen_buffer, 0x00, s->code_gen_buffer_size);
     s->code_gen_highwater = (char *)end - TCG_HIGHWATER;
 }
 
