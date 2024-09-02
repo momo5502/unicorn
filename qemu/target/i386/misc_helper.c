@@ -206,24 +206,57 @@ void helper_invlpg(CPUX86State *env, target_ulong addr)
     tlb_flush_page(CPU(cpu), addr);
 }
 
-void helper_rdtsc(CPUX86State *env)
-{
+static int do_rdtsc(CPUX86State *env, int is_p) {
     uint64_t val;
+    uc_engine *uc = env->uc;
+    struct hook *hook;
+    int skip_rdtsc = 0;
+    int target_insn = is_p ? UC_X86_INS_RDTSCP : UC_X86_INS_RDTSC;
 
     if ((env->cr[4] & CR4_TSD_MASK) && ((env->hflags & HF_CPL_MASK) != 0)) {
         raise_exception_ra(env, EXCP0D_GPF, GETPC());
     }
     cpu_svm_check_intercept_param(env, SVM_EXIT_RDTSC, 0, GETPC());
 
-    val = cpu_get_tsc(env) + env->tsc_offset;
-    env->regs[R_EAX] = (uint32_t)(val);
-    env->regs[R_EDX] = (uint32_t)(val >> 32);
+    HOOK_FOREACH_VAR_DECLARE;
+    HOOK_FOREACH(env->uc, hook, UC_HOOK_INSN) {
+        if (hook->to_delete)
+            continue;
+        if (!HOOK_BOUND_CHECK(hook, env->eip))
+            continue;
+        
+        // Multiple cpuid callbacks returning different values is undefined.
+        // true -> skip the cpuid instruction
+        if (hook->insn == target_insn) {
+            JIT_CALLBACK_GUARD_VAR(skip_rdtsc, ((uc_cb_insn_cpuid_t)hook->callback)(env->uc, hook->user_data));
+        }
+
+        // the last callback may already asked to stop emulation
+        if (env->uc->stop_request)
+            break;
+    }
+
+    if (!skip_rdtsc) {
+        val = cpu_get_tsc(env) + env->tsc_offset;
+        env->regs[R_EAX] = (uint32_t)(val);
+        env->regs[R_EDX] = (uint32_t)(val >> 32);
+    }
+
+    return skip_rdtsc;
+}
+
+void helper_rdtsc(CPUX86State *env)
+{
+    (void)do_rdtsc(env, 0);
 }
 
 void helper_rdtscp(CPUX86State *env)
 {
-    helper_rdtsc(env);
-    env->regs[R_ECX] = (uint32_t)(env->tsc_aux);
+    int skip = do_rdtsc(env, 1);
+
+    if (!skip) {
+        env->regs[R_ECX] = (uint32_t)(env->tsc_aux);
+    }
 }
 
 void helper_rdpmc(CPUX86State *env)
