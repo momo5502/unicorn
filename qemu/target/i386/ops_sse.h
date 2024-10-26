@@ -510,7 +510,7 @@ void glue(helper_movq_mm_T0, SUFFIX)(Reg *d, uint64_t val)
 #if SHIFT == 0
 void glue(helper_pshufw, SUFFIX)(Reg *d, Reg *s, int order)
 {
-    Reg r;
+    Reg r; memset(&r, 0, sizeof(r));
 
     r.W(0) = s->W(order & 3);
     r.W(1) = s->W((order >> 2) & 3);
@@ -521,7 +521,7 @@ void glue(helper_pshufw, SUFFIX)(Reg *d, Reg *s, int order)
 #else
 void helper_shufps(Reg *d, Reg *s, int order)
 {
-    Reg r;
+    Reg r; memset(&r, 0, sizeof(r));
 
     r.L(0) = d->L(order & 3);
     r.L(1) = d->L((order >> 2) & 3);
@@ -532,7 +532,7 @@ void helper_shufps(Reg *d, Reg *s, int order)
 
 void helper_shufpd(Reg *d, Reg *s, int order)
 {
-    Reg r;
+    Reg r; memset(&r, 0, sizeof(r));
 
     r.Q(0) = d->Q(order & 1);
     r.Q(1) = s->Q((order >> 1) & 1);
@@ -541,7 +541,7 @@ void helper_shufpd(Reg *d, Reg *s, int order)
 
 void glue(helper_pshufd, SUFFIX)(Reg *d, Reg *s, int order)
 {
-    Reg r;
+    Reg r; memset(&r, 0, sizeof(r));
 
     r.L(0) = s->L(order & 3);
     r.L(1) = s->L((order >> 2) & 3);
@@ -552,7 +552,7 @@ void glue(helper_pshufd, SUFFIX)(Reg *d, Reg *s, int order)
 
 void glue(helper_pshuflw, SUFFIX)(Reg *d, Reg *s, int order)
 {
-    Reg r;
+    Reg r; memset(&r, 0, sizeof(r));
 
     r.W(0) = s->W(order & 3);
     r.W(1) = s->W((order >> 2) & 3);
@@ -564,7 +564,7 @@ void glue(helper_pshuflw, SUFFIX)(Reg *d, Reg *s, int order)
 
 void glue(helper_pshufhw, SUFFIX)(Reg *d, Reg *s, int order)
 {
-    Reg r;
+    Reg r; memset(&r, 0, sizeof(r));
 
     r.Q(0) = s->Q(0);
     r.W(4) = s->W(4 + (order & 3));
@@ -1123,7 +1123,7 @@ uint32_t glue(helper_pmovmskb, SUFFIX)(CPUX86State *env, Reg *s)
 
 void glue(helper_packsswb, SUFFIX)(CPUX86State *env, Reg *d, Reg *s)
 {
-    Reg r;
+    Reg r; memset(&r, 0, sizeof(r));
 
     r.B(0) = satsb((int16_t)d->W(0));
     r.B(1) = satsb((int16_t)d->W(1));
@@ -1150,7 +1150,7 @@ void glue(helper_packsswb, SUFFIX)(CPUX86State *env, Reg *d, Reg *s)
 
 void glue(helper_packuswb, SUFFIX)(CPUX86State *env, Reg *d, Reg *s)
 {
-    Reg r;
+    Reg r; memset(&r, 0, sizeof(r));
 
     r.B(0) = satub((int16_t)d->W(0));
     r.B(1) = satub((int16_t)d->W(1));
@@ -1177,7 +1177,7 @@ void glue(helper_packuswb, SUFFIX)(CPUX86State *env, Reg *d, Reg *s)
 
 void glue(helper_packssdw, SUFFIX)(CPUX86State *env, Reg *d, Reg *s)
 {
-    Reg r;
+    Reg r; memset(&r, 0, sizeof(r));
 
     r.W(0) = satsw(d->L(0));
     r.W(1) = satsw(d->L(1));
@@ -1199,7 +1199,7 @@ void glue(helper_packssdw, SUFFIX)(CPUX86State *env, Reg *d, Reg *s)
     void glue(helper_punpck ## base_name ## bw, SUFFIX)(CPUX86State *env,\
                                                         Reg *d, Reg *s) \
     {                                                                   \
-        Reg r;                                                          \
+        Reg r; memset(&r, 0, sizeof(r));                                                          \
                                                                         \
         r.B(0) = d->B((base << (SHIFT + 2)) + 0);                       \
         r.B(1) = s->B((base << (SHIFT + 2)) + 0);                       \
@@ -1225,7 +1225,7 @@ void glue(helper_packssdw, SUFFIX)(CPUX86State *env, Reg *d, Reg *s)
     void glue(helper_punpck ## base_name ## wd, SUFFIX)(CPUX86State *env,\
                                                         Reg *d, Reg *s) \
     {                                                                   \
-        Reg r;                                                          \
+        Reg r; memset(&r, 0, sizeof(r));                                                          \
                                                                         \
         r.W(0) = d->W((base << (SHIFT + 1)) + 0);                       \
         r.W(1) = s->W((base << (SHIFT + 1)) + 0);                       \
@@ -1243,7 +1243,7 @@ void glue(helper_packssdw, SUFFIX)(CPUX86State *env, Reg *d, Reg *s)
     void glue(helper_punpck ## base_name ## dq, SUFFIX)(CPUX86State *env,\
                                                         Reg *d, Reg *s) \
     {                                                                   \
-        Reg r;                                                          \
+        Reg r; memset(&r, 0, sizeof(r));                                                          \
                                                                         \
         r.L(0) = d->L((base << SHIFT) + 0);                             \
         r.L(1) = s->L((base << SHIFT) + 0);                             \
@@ -1260,7 +1260,7 @@ void glue(helper_packssdw, SUFFIX)(CPUX86State *env, Reg *d, Reg *s)
                                                                   Reg *d, \
                                                                   Reg *s) \
              {                                                          \
-                 Reg r;                                                 \
+                 Reg r; memset(&r, 0, sizeof(r));                                                 \
                                                                         \
                  r.Q(0) = d->Q(base);                                   \
                  r.Q(1) = s->Q(base);                                   \
@@ -1424,7 +1424,7 @@ void helper_pswapd(CPUX86State *env, MMXReg *d, MMXReg *s)
 void glue(helper_pshufb, SUFFIX)(CPUX86State *env, Reg *d, Reg *s)
 {
     int i;
-    Reg r;
+    Reg r; memset(&r, 0, sizeof(r));
 
     for (i = 0; i < (8 << SHIFT); i++) {
         r.B(i) = (s->B(i) & 0x80) ? 0 : (d->B(s->B(i) & ((8 << SHIFT) - 1)));
@@ -1539,7 +1539,7 @@ SSE_HELPER_L(helper_psignd, FSIGNL)
 void glue(helper_palignr, SUFFIX)(CPUX86State *env, Reg *d, Reg *s,
                                   int32_t shift)
 {
-    Reg r;
+    Reg r; memset(&r, 0, sizeof(r));
 
     /* XXX could be checked during translation */
     if (shift >= (16 << SHIFT)) {
@@ -1687,7 +1687,7 @@ SSE_HELPER_Q(helper_pcmpeqq, FCMPEQQ)
 
 void glue(helper_packusdw, SUFFIX)(CPUX86State *env, Reg *d, Reg *s)
 {
-    Reg r;
+    Reg r; memset(&r, 0, sizeof(r));
 
     r.W(0) = satuw((int32_t) d->L(0));
     r.W(1) = satuw((int32_t) d->L(1));
@@ -1957,7 +1957,7 @@ void glue(helper_mpsadbw, SUFFIX)(CPUX86State *env, Reg *d, Reg *s,
     int s0 = (offset & 3) << 2;
     int d0 = (offset & 4) << 0;
     int i;
-    Reg r;
+    Reg r; memset(&r, 0, sizeof(r));
 
     for (i = 0; i < 8; i++, d0++) {
         r.W(i) = 0;
