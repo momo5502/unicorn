@@ -2101,7 +2101,7 @@ uc_err uc_context_alloc(uc_engine *uc, uc_context **context)
 
     UC_INIT(uc);
 
-    *_context = g_malloc(size);
+    *_context = g_malloc0(size);
     if (*_context) {
         (*_context)->context_size = size - sizeof(uc_context);
         (*_context)->arch = uc->arch;
