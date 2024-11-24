@@ -2160,6 +2160,7 @@ uc_err uc_context_save(uc_engine *uc, uc_context *context)
         }
         context->ramblock_freed = uc->ram_list.freed;
         context->last_block = uc->ram_list.last_block;
+        uc->tcg_flush_tlb(uc);
     }
 
     context->snapshot_level = uc->snapshot_level;
@@ -2428,6 +2429,7 @@ uc_err uc_context_restore(uc_engine *uc, uc_context *context)
         uc->snapshot_level = context->snapshot_level;
         ret = uc_restore_latest_snapshot(uc);
         if (ret != UC_ERR_OK) {
+            restore_jit_state(uc);
             return ret;
         }
         uc_snapshot(uc);
@@ -2436,14 +2438,18 @@ uc_err uc_context_restore(uc_engine *uc, uc_context *context)
         if (!uc->flatview_copy(uc, uc->address_space_memory.current_map, context->fv, true)) {
             return UC_ERR_NOMEM;
         }
+        uc->tcg_flush_tlb(uc);
     }
 
     if (uc->context_content & UC_CTL_CONTEXT_CPU) {
         if (!uc->context_restore) {
             memcpy(uc->cpu->env_ptr, context->data, context->context_size);
+            restore_jit_state(uc);
             return UC_ERR_OK;
         } else {
-            return uc->context_restore(uc, context);
+            ret = uc->context_restore(uc, context);
+            restore_jit_state(uc);
+            return ret;
         }
     }
     return UC_ERR_OK;
