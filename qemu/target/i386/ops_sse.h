@@ -1302,6 +1302,7 @@ void helper_pf2iw(CPUX86State *env, MMXReg *d, MMXReg *s)
 void helper_pfacc(CPUX86State *env, MMXReg *d, MMXReg *s)
 {
     MMXReg r;
+    memset(&r, 0, sizeof(r));
 
     r.MMX_S(0) = float32_add(d->MMX_S(0), d->MMX_S(1), &env->mmx_status);
     r.MMX_S(1) = float32_add(s->MMX_S(0), s->MMX_S(1), &env->mmx_status);
@@ -1366,7 +1367,7 @@ void helper_pfmul(CPUX86State *env, MMXReg *d, MMXReg *s)
 
 void helper_pfnacc(CPUX86State *env, MMXReg *d, MMXReg *s)
 {
-    MMXReg r;
+    MMXReg r;memset(&r, 0, sizeof(r));
 
     r.MMX_S(0) = float32_sub(d->MMX_S(0), d->MMX_S(1), &env->mmx_status);
     r.MMX_S(1) = float32_sub(s->MMX_S(0), s->MMX_S(1), &env->mmx_status);
@@ -1375,7 +1376,7 @@ void helper_pfnacc(CPUX86State *env, MMXReg *d, MMXReg *s)
 
 void helper_pfpnacc(CPUX86State *env, MMXReg *d, MMXReg *s)
 {
-    MMXReg r;
+    MMXReg r;memset(&r, 0, sizeof(r));
 
     r.MMX_S(0) = float32_sub(d->MMX_S(0), d->MMX_S(1), &env->mmx_status);
     r.MMX_S(1) = float32_add(s->MMX_S(0), s->MMX_S(1), &env->mmx_status);
@@ -1412,7 +1413,7 @@ void helper_pfsubr(CPUX86State *env, MMXReg *d, MMXReg *s)
 
 void helper_pswapd(CPUX86State *env, MMXReg *d, MMXReg *s)
 {
-    MMXReg r;
+    MMXReg r;memset(&r, 0, sizeof(r));
 
     r.MMX_L(0) = s->MMX_L(1);
     r.MMX_L(1) = s->MMX_L(0);
