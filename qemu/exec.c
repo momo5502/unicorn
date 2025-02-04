@@ -636,17 +636,19 @@ static void breakpoint_invalidate(CPUState *cpu, target_ulong pc)
     tb_flush(cpu);
 }
 
+#define ENABLE_CPU_WATCHPOINTS 1
+
 /* Add a watchpoint.  */
 int cpu_watchpoint_insert(CPUState *cpu, vaddr addr, vaddr len,
                           int flags, CPUWatchpoint **watchpoint)
 {
-#if 0
+#if ENABLE_CPU_WATCHPOINTS
     CPUWatchpoint *wp;
 
     /* forbid ranges which are empty or run off the end of the address space */
     if (len == 0 || (addr + len - 1) < addr) {
-        error_report("tried to set invalid watchpoint at %"
-                     VADDR_PRIx ", len=%" VADDR_PRIu, addr, len);
+        //error_report("tried to set invalid watchpoint at %"
+        //             VADDR_PRIx ", len=%" VADDR_PRIu, addr, len);
         return -EINVAL;
     }
     wp = g_malloc(sizeof(*wp));
@@ -674,7 +676,7 @@ int cpu_watchpoint_insert(CPUState *cpu, vaddr addr, vaddr len,
 /* Remove a specific watchpoint by reference.  */
 void cpu_watchpoint_remove_by_ref(CPUState *cpu, CPUWatchpoint *watchpoint)
 {
-#if 0
+#if ENABLE_CPU_WATCHPOINTS
     QTAILQ_REMOVE(&cpu->watchpoints, watchpoint, entry);
 
     tlb_flush_page(cpu, watchpoint->vaddr);
@@ -686,7 +688,7 @@ void cpu_watchpoint_remove_by_ref(CPUState *cpu, CPUWatchpoint *watchpoint)
 /* Remove all matching watchpoints.  */
 void cpu_watchpoint_remove_all(CPUState *cpu, int mask)
 {
-#if 0
+#if ENABLE_CPU_WATCHPOINTS
     CPUWatchpoint *wp, *next;
 
     QTAILQ_FOREACH_SAFE(wp, &cpu->watchpoints, entry, next) {
@@ -697,10 +699,26 @@ void cpu_watchpoint_remove_all(CPUState *cpu, int mask)
 #endif
 }
 
+static inline bool watchpoint_address_matches(CPUWatchpoint *wp,
+                                              vaddr addr, vaddr len)
+{
+    /*
+     * We know the lengths are non-zero, but a little caution is
+     * required to avoid errors in the case where the range ends
+     * exactly at the top of the address space and so addr + len
+     * wraps round to zero.
+     */
+    vaddr wpend = wp->vaddr + wp->len - 1;
+    vaddr addrend = addr + len - 1;
+
+    return !(addr > wpend || wp->vaddr > addrend);
+}
+
+
 /* Return flags for watchpoints that match addr + prot.  */
 int cpu_watchpoint_address_matches(CPUState *cpu, vaddr addr, vaddr len)
 {
-#if 0
+#if ENABLE_CPU_WATCHPOINTS
     CPUWatchpoint *wp;
     int ret = 0;
 
@@ -1296,6 +1314,18 @@ ram_addr_t qemu_ram_addr_from_host(struct uc_struct *uc, void *ptr)
 void cpu_check_watchpoint(CPUState *cpu, vaddr addr, vaddr len,
                           MemTxAttrs attrs, int flags, uintptr_t ra)
 {
+#if ENABLE_CPU_WATCHPOINTS
+    CPUWatchpoint *wp;
+
+    QTAILQ_FOREACH(wp, &cpu->watchpoints, entry) {
+        if (watchpoint_address_matches(wp, addr, len) && (wp->flags & flags) == flags) {
+            wp->flags |= (flags & BP_MEM_READ) ? BP_WATCHPOINT_HIT_READ : 0;
+            wp->flags |= (flags & BP_MEM_WRITE) ? BP_WATCHPOINT_HIT_WRITE : 0;
+            cpu->watchpoint_hit = wp;
+        }
+    }
+    raise_exception_ra(cpu->env_ptr, EXCP_DEBUG, ra);
+#endif
 }
 
 static MemTxResult flatview_read(struct uc_struct *uc, FlatView *fv, hwaddr addr,
