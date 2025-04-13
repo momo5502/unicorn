@@ -4,6 +4,7 @@
 #ifndef UNICORN_ARCH_POSTFIX
 #define UNICORN_ARCH_POSTFIX _s390x
 #endif
+#define gen_helper_check_exit_request gen_helper_check_exit_request_s390x
 #define unicorn_fill_tlb unicorn_fill_tlb_s390x
 #define reg_read reg_read_s390x
 #define reg_write reg_write_s390x
@@ -1290,6 +1291,8 @@
 #define gen_helper_cpsr_read gen_helper_cpsr_read_s390x
 #define gen_helper_cpsr_write gen_helper_cpsr_write_s390x
 #define tlb_reset_dirty_by_vaddr tlb_reset_dirty_by_vaddr_s390x
+#define helper_stqcx_le_parallel helper_stqcx_le_parallel_s390x
+#define helper_stqcx_be_parallel helper_stqcx_be_parallel_s390x
 #define helper_uc_s390x_exit helper_uc_s390x_exit_s390x
 #define tcg_s390_tod_updated tcg_s390_tod_updated_s390x
 #define tcg_s390_program_interrupt tcg_s390_program_interrupt_s390x

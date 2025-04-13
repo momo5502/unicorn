@@ -4,6 +4,7 @@
 #ifndef UNICORN_ARCH_POSTFIX
 #define UNICORN_ARCH_POSTFIX _mips64el
 #endif
+#define gen_helper_check_exit_request gen_helper_check_exit_request_mips64el
 #define unicorn_fill_tlb unicorn_fill_tlb_mips64el
 #define reg_read reg_read_mips64el
 #define reg_write reg_write_mips64el
@@ -1290,6 +1291,8 @@
 #define gen_helper_cpsr_read gen_helper_cpsr_read_mips64el
 #define gen_helper_cpsr_write gen_helper_cpsr_write_mips64el
 #define tlb_reset_dirty_by_vaddr tlb_reset_dirty_by_vaddr_mips64el
+#define helper_stqcx_le_parallel helper_stqcx_le_parallel_mips64el
+#define helper_stqcx_be_parallel helper_stqcx_be_parallel_mips64el
 #define helper_mfc0_mvpcontrol helper_mfc0_mvpcontrol_mips64el
 #define helper_mfc0_mvpconf0 helper_mfc0_mvpconf0_mips64el
 #define helper_mfc0_mvpconf1 helper_mfc0_mvpconf1_mips64el

@@ -65,14 +65,14 @@ typedef size_t uc_hook;
 #define UNICORN_DEPRECATED __declspec(deprecated)
 #else
 #pragma message(                                                               \
-        "WARNING: You need to implement UNICORN_DEPRECATED for this compiler")
+    "WARNING: You need to implement UNICORN_DEPRECATED for this compiler")
 #define UNICORN_DEPRECATED
 #endif
 
 // Unicorn API version
 #define UC_API_MAJOR 2
 #define UC_API_MINOR 1
-#define UC_API_PATCH 1
+#define UC_API_PATCH 3
 // Release candidate version, 255 means the official release.
 #define UC_API_EXTRA 255
 
@@ -418,7 +418,10 @@ typedef enum uc_hook_type {
     (UC_HOOK_MEM_READ + UC_HOOK_MEM_WRITE + UC_HOOK_MEM_FETCH)
 
 /*
-  Callback function for hooking memory (READ, WRITE & FETCH)
+  Callback function for hooking memory (READ, WRITE & FETCH).
+
+  NOTE: The access might be splitted depending on the MMU implementation.
+  UC_TLB_VIRTUAL provides more fine-grained control about memory accessing.
 
   @type: this memory is being READ, or WRITE
   @address: address where memory is being written or read to
@@ -433,6 +436,9 @@ typedef void (*uc_cb_hookmem_t)(uc_engine *uc, uc_mem_type type,
 /*
   Callback function for handling invalid memory access events (UNMAPPED and
     PROT events)
+
+  NOTE: The access might be splitted depending on the MMU implementation.
+  UC_TLB_VIRTUAL provides more fine-grained control about memory accessing.
 
   @type: this memory is being READ, or WRITE
   @address: address where memory is being written or read to
@@ -842,7 +848,7 @@ uc_err uc_reg_read2(uc_engine *uc, int regid, void *value, size_t *size);
  invalid
 */
 UNICORN_EXPORT
-uc_err uc_reg_write_batch(uc_engine *uc, int *regs, void *const *vals,
+uc_err uc_reg_write_batch(uc_engine *uc, int const *regs, void *const *vals,
                           int count);
 
 /*
@@ -857,7 +863,8 @@ uc_err uc_reg_write_batch(uc_engine *uc, int *regs, void *const *vals,
  invalid
 */
 UNICORN_EXPORT
-uc_err uc_reg_read_batch(uc_engine *uc, int *regs, void **vals, int count);
+uc_err uc_reg_read_batch(uc_engine *uc, int const *regs, void **vals,
+                         int count);
 
 /*
  Write multiple register values.
@@ -873,8 +880,8 @@ uc_err uc_reg_read_batch(uc_engine *uc, int *regs, void **vals, int count);
  corresponding register.
 */
 UNICORN_EXPORT
-uc_err uc_reg_write_batch2(uc_engine *uc, int *regs, const void *const *vals,
-                           size_t *sizes, int count);
+uc_err uc_reg_write_batch2(uc_engine *uc, int const *regs,
+                           const void *const *vals, size_t *sizes, int count);
 
 /*
  Read multiple register values.
@@ -891,7 +898,7 @@ uc_err uc_reg_write_batch2(uc_engine *uc, int *regs, const void *const *vals,
  corresponding register.
 */
 UNICORN_EXPORT
-uc_err uc_reg_read_batch2(uc_engine *uc, int *regs, void *const *vals,
+uc_err uc_reg_read_batch2(uc_engine *uc, int const *regs, void *const *vals,
                           size_t *sizes, int count);
 
 /*
@@ -1272,8 +1279,8 @@ uc_err uc_context_reg_read2(uc_context *ctx, int regid, void *value,
    for detailed error).
 */
 UNICORN_EXPORT
-uc_err uc_context_reg_write_batch(uc_context *ctx, int *regs, void *const *vals,
-                                  int count);
+uc_err uc_context_reg_write_batch(uc_context *ctx, int const *regs,
+                                  void *const *vals, int count);
 
 /*
  Read multiple register values from a context.
@@ -1287,7 +1294,7 @@ uc_err uc_context_reg_write_batch(uc_context *ctx, int *regs, void *const *vals,
    for detailed error).
 */
 UNICORN_EXPORT
-uc_err uc_context_reg_read_batch(uc_context *ctx, int *regs, void **vals,
+uc_err uc_context_reg_read_batch(uc_context *ctx, int const *regs, void **vals,
                                  int count);
 
 /*
@@ -1304,7 +1311,7 @@ uc_err uc_context_reg_read_batch(uc_context *ctx, int *regs, void **vals,
  corresponding register.
 */
 UNICORN_EXPORT
-uc_err uc_context_reg_write_batch2(uc_context *ctx, int *regs,
+uc_err uc_context_reg_write_batch2(uc_context *ctx, int const *regs,
                                    const void *const *vals, size_t *sizes,
                                    int count);
 
@@ -1323,8 +1330,8 @@ uc_err uc_context_reg_write_batch2(uc_context *ctx, int *regs,
  corresponding register.
 */
 UNICORN_EXPORT
-uc_err uc_context_reg_read_batch2(uc_context *ctx, int *regs, void *const *vals,
-                                  size_t *sizes, int count);
+uc_err uc_context_reg_read_batch2(uc_context *ctx, int const *regs,
+                                  void *const *vals, size_t *sizes, int count);
 
 /*
  Restore the current CPU context from a saved copy.

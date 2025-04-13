@@ -4,6 +4,7 @@
 #ifndef UNICORN_ARCH_POSTFIX
 #define UNICORN_ARCH_POSTFIX _tricore
 #endif
+#define gen_helper_check_exit_request gen_helper_check_exit_request_tricore
 #define unicorn_fill_tlb unicorn_fill_tlb_tricore
 #define reg_read reg_read_tricore
 #define reg_write reg_write_tricore
@@ -1290,6 +1291,8 @@
 #define gen_helper_cpsr_read gen_helper_cpsr_read_tricore
 #define gen_helper_cpsr_write gen_helper_cpsr_write_tricore
 #define tlb_reset_dirty_by_vaddr tlb_reset_dirty_by_vaddr_tricore
+#define helper_stqcx_le_parallel helper_stqcx_le_parallel_tricore
+#define helper_stqcx_be_parallel helper_stqcx_be_parallel_tricore
 #define helper_fadd helper_fadd_tricore
 #define helper_fsub helper_fsub_tricore
 #define helper_fmul helper_fmul_tricore

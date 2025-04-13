@@ -359,6 +359,9 @@ static inline bool cpu_handle_exception(CPUState *cpu, int *ret)
             // we want to stop emulation
             *ret = EXCP_HLT;
             return true;
+        } else {
+            // Continue execution because user hints us it has been handled
+            cpu->exception_index = -1;
         }
     }
 
@@ -408,7 +411,9 @@ static inline bool cpu_handle_exception(CPUState *cpu, int *ret)
         // Unicorn: If un-catched interrupt, stop executions.
         if (!catched) {
             // printf("AAAAAAAAAAAA\n"); qq
-            uc->invalid_error = UC_ERR_EXCEPTION;
+            if (uc->invalid_error == UC_ERR_OK) {
+                uc->invalid_error = UC_ERR_EXCEPTION;
+            }
             cpu->halted = 1;
             *ret = EXCP_HLT;
             return true;

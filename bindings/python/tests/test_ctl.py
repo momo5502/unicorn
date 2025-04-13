@@ -20,7 +20,9 @@ def test_uc_ctl_read():
 
     timeout = uc.ctl_get_timeout()
 
-    print(f">>> arch={arch} mode={mode} page size={page_size} timeout={timeout}")
+    print(">>> arch={arch} mode={mode} page size={page_size} timeout={timeout}".format(arch=arch, mode=mode,
+                                                                                       page_size=page_size,
+                                                                                       timeout=timeout))
 
 
 def time_emulation(uc, start, end):
@@ -31,6 +33,7 @@ def time_emulation(uc, start, end):
     return (datetime.now() - n).total_seconds() * 1e6
 
 
+# TODO: Check if worth adapting the ctl_request_cache method for py2 bindings
 def test_uc_ctl_tb_cache():
     # Initialize emulator in X86-32bit mode
     uc = Uc(UC_ARCH_X86, UC_MODE_32)
@@ -52,7 +55,7 @@ def test_uc_ctl_tb_cache():
     # Now we request cache for all TBs.
     for i in range(8):
         tb = uc.ctl_request_cache(addr + i * 512)
-        print(f">>> TB is cached at {hex(tb[0])} which has {tb[1]} instructions with {tb[2]} bytes")
+        print(">>> TB is cached at {:#x} which has {} instructions with {} bytes".format(tb[0], tb[1], tb[2]))
 
     # Do emulation with all TB cached.
     cached = time_emulation(uc, addr, addr + len(code))
@@ -63,17 +66,21 @@ def test_uc_ctl_tb_cache():
 
     evicted = time_emulation(uc, addr, addr + len(code))
 
-    print(f">>> Run time: First time {standard}, Cached: {cached}, Cached evicted: {evicted}")
+    print(">>> Run time: First time {standard}, Cached: {cached}, Cached evicted: {evicted}".format(standard=standard,
+                                                                                                    cached=cached,
+                                                                                                    evicted=evicted))
 
 
 def trace_new_edge(uc, cur, prev, data):
-    print(f">>> Getting a new edge from {hex(prev.pc + prev.size - 1)} to {hex(cur.pc)}")
+    print(">>> Getting a new edge from {:#x} to {:#x}".format(prev.pc + prev.size - 1, cur.pc))
 
 
 def trace_tcg_sub(uc, address, arg1, arg2, size, data):
-    print(f">>> Get a tcg sub opcode at {hex(address)} with args: {arg1} and {arg2}")
+    print(">>> Get a tcg sub opcode at {address:#x} with args: {arg1} and {arg2}".format(address=address, arg1=arg1,
+                                                                                         arg2=arg2))
 
 
+# TODO: Check if worth adapting the hook_add method for py2 bindings
 def test_uc_ctl_exits():
     uc = Uc(UC_ARCH_X86, UC_MODE_32)
     addr = 0x1000
@@ -110,7 +117,7 @@ def test_uc_ctl_exits():
     eax = uc.reg_read(UC_X86_REG_EAX)
     ebx = uc.reg_read(UC_X86_REG_EBX)
 
-    print(f">>> eax = {hex(eax)} and ebx = {hex(ebx)} after the first emulation")
+    print(">>> eax = {eax:#x} and ebx = {ebx:#x} after the first emulation".format(eax=eax, ebx=ebx))
 
     # This should stop at ADDRESS + 8, even though we don't provide an exit.
     uc.emu_start(addr, 0)
@@ -118,7 +125,7 @@ def test_uc_ctl_exits():
     eax = uc.reg_read(UC_X86_REG_EAX)
     ebx = uc.reg_read(UC_X86_REG_EBX)
 
-    print(f">>> eax = {hex(eax)} and ebx = {hex(ebx)} after the first emulation")
+    print(">>> eax = {eax:#x} and ebx = {ebx:#x} after the first emulation".format(eax=eax, ebx=ebx))
 
 
 if __name__ == "__main__":

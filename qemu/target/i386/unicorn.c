@@ -97,6 +97,9 @@ static void reg_reset(struct uc_struct *uc)
 
     memset(env->opmask_regs, 0, sizeof(env->opmask_regs));
     memset(env->zmmh_regs, 0, sizeof(env->zmmh_regs));
+    memset(env->dr, 0, sizeof(env->dr));
+    env->dr[6] = DR6_FIXED_1;
+    env->dr[7] = DR7_FIXED_1;
 
     /* sysenter registers */
     env->sysenter_cs = 0;
@@ -155,18 +158,38 @@ static void reg_reset(struct uc_struct *uc)
         break;
     case UC_MODE_32:
         env->hflags |= HF_CS32_MASK | HF_SS32_MASK | HF_OSFXSR_MASK;
-        cpu_x86_update_cr0(env, CR0_PE_MASK); // protected mode
         break;
     case UC_MODE_64:
         env->hflags |= HF_CS32_MASK | HF_SS32_MASK | HF_CS64_MASK |
                        HF_LMA_MASK | HF_OSFXSR_MASK;
         env->hflags &= ~(HF_ADDSEG_MASK);
         env->efer |= MSR_EFER_LMA | MSR_EFER_LME; // extended mode activated
-        cpu_x86_update_cr0(env, CR0_PE_MASK);     // protected mode
+
         /* If we are operating in 64bit mode then add the Long Mode flag
          * to the CPUID feature flag
          */
         env->features[FEAT_8000_0001_EDX] |= CPUID_EXT2_LM;
+        break;
+    }
+
+    // CR initialization
+    switch (uc->mode) {
+    case UC_MODE_32:
+    case UC_MODE_64: {
+        uint32_t cr4 = 0;
+
+        if (env->features[FEAT_1_ECX] & CPUID_EXT_XSAVE) {
+            cr4 |= CR4_OSFXSR_MASK | CR4_OSXSAVE_MASK;
+        }
+        if (env->features[FEAT_7_0_EBX] & CPUID_7_0_EBX_FSGSBASE) {
+            cr4 |= CR4_FSGSBASE_MASK;
+        }
+
+        cpu_x86_update_cr0(env, CR0_PE_MASK); // protected mode
+        cpu_x86_update_cr4(env, cr4);
+        break;
+    }
+    default:
         break;
     }
 }
@@ -2002,7 +2025,8 @@ static bool x86_stop_interrupt(struct uc_struct *uc, int intno)
 
 static bool x86_insn_hook_validate(uint32_t insn_enum)
 {
-    // for x86 we can only hook IN, OUT, and SYSCALL
+    // for x86 we can only hook IN, OUT, SYSCALL, SYSENTER, CPUID, RDTSC, and
+    // RDTSCP
     if (insn_enum != UC_X86_INS_IN && insn_enum != UC_X86_INS_OUT &&
         insn_enum != UC_X86_INS_SYSCALL && insn_enum != UC_X86_INS_SYSENTER &&
         insn_enum != UC_X86_INS_CPUID && insn_enum != UC_X86_INS_RDTSC &&
@@ -2060,7 +2084,7 @@ void uc_init(struct uc_struct *uc)
     uc->insn_hook_validate = x86_insn_hook_validate;
     uc->opcode_hook_invalidate = x86_opcode_hook_invalidate;
     uc->cpus_init = x86_cpus_init;
-    uc->cpu_context_size = offsetof(CPUX86State, retaddr);
+    uc->cpu_context_size = offsetof(CPUX86State, end_reset_fields);
     uc_common_init(uc);
 }
 

@@ -4,6 +4,7 @@
 #ifndef UNICORN_ARCH_POSTFIX
 #define UNICORN_ARCH_POSTFIX _riscv64
 #endif
+#define gen_helper_check_exit_request gen_helper_check_exit_request_riscv64
 #define unicorn_fill_tlb unicorn_fill_tlb_riscv64
 #define reg_read reg_read_riscv64
 #define reg_write reg_write_riscv64
@@ -1290,6 +1291,8 @@
 #define gen_helper_cpsr_read gen_helper_cpsr_read_riscv64
 #define gen_helper_cpsr_write gen_helper_cpsr_write_riscv64
 #define tlb_reset_dirty_by_vaddr tlb_reset_dirty_by_vaddr_riscv64
+#define helper_stqcx_le_parallel helper_stqcx_le_parallel_riscv64
+#define helper_stqcx_be_parallel helper_stqcx_be_parallel_riscv64
 #define riscv_cpu_mmu_index riscv_cpu_mmu_index_riscv64
 #define riscv_cpu_exec_interrupt riscv_cpu_exec_interrupt_riscv64
 #define riscv_cpu_fp_enabled riscv_cpu_fp_enabled_riscv64

@@ -1469,7 +1469,7 @@ load_helper(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
     uintptr_t index = tlb_index(env, mmu_idx, addr);
     CPUTLBEntry *entry = tlb_entry(env, mmu_idx, addr);
     target_ulong tlb_addr = code_read ? entry->addr_code : entry->addr_read;
-    target_ulong paddr;
+    hwaddr paddr;
     const size_t tlb_off = code_read ?
         offsetof(CPUTLBEntry, addr_code) : offsetof(CPUTLBEntry, addr_read);
     const MMUAccessType access_type =
@@ -1484,6 +1484,7 @@ load_helper(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
     HOOK_FOREACH_VAR_DECLARE;
     struct uc_struct *uc = env->uc;
     MemoryRegion *mr;
+    bool synced = false;
 
     /* Handle CPU specific unaligned behaviour */
     if (addr & ((1 << a_bits) - 1)) {
@@ -1513,13 +1514,17 @@ load_helper(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
         // if there is already an unhandled eror, skip callbacks.
         if (uc->invalid_error == UC_ERR_OK) {
             if (code_read) {
-                // code fetching
+                // code fetching  
                 error_code = UC_ERR_FETCH_UNMAPPED;
                 HOOK_FOREACH(uc, hook, UC_HOOK_MEM_FETCH_UNMAPPED) {
                     if (hook->to_delete)
                         continue;
                     if (!HOOK_BOUND_CHECK(hook, paddr))
                         continue;
+                    if (!synced && !uc->skip_sync_pc_on_exit && retaddr) {
+                        cpu_restore_state(uc->cpu, retaddr, false);
+                        synced = true;
+                    }
                     JIT_CALLBACK_GUARD_VAR(handled,
                                            ((uc_cb_eventmem_t)hook->callback)(uc, UC_MEM_FETCH_UNMAPPED, paddr, size, 0, hook->user_data));
                     if (handled)
@@ -1537,6 +1542,10 @@ load_helper(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
                         continue;
                     if (!HOOK_BOUND_CHECK(hook, paddr))
                         continue;
+                    if (!synced &&!uc->skip_sync_pc_on_exit && retaddr) {
+                        cpu_restore_state(uc->cpu, retaddr, false);
+                        synced = true;
+                    }
                     JIT_CALLBACK_GUARD_VAR(handled, 
                                            ((uc_cb_eventmem_t)hook->callback)(uc, UC_MEM_READ_UNMAPPED, paddr, size, 0, hook->user_data));
                     if (handled)
@@ -1575,7 +1584,7 @@ load_helper(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
                     //                because qemu might generate tcg code like:
                     //                       qemu_ld_i64 x0,x1,leq,8  sync: 0  dead: 0 1
                     //                where we don't have a change to recover x0 value
-                    cpu_loop_exit(uc->cpu);
+                    cpu_loop_exit_restore(uc->cpu, retaddr);
                 }
                 return 0;
             }
@@ -1586,20 +1595,25 @@ load_helper(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
             if (uc->nested_level > 0 && !uc->cpu->stopped) {
                 cpu_exit(uc->cpu);
                 // See comments above
-                cpu_loop_exit(uc->cpu);
+                cpu_loop_exit_restore(uc->cpu, retaddr);
             }
             return 0;
         }
     }
 
     // now it is read on mapped memory
-    if (!code_read) {
+    // patch issue #1041 multiple UC_HOOK_MEM callbacks for unaligned access
+    if (!code_read && !uc->size_recur_mem) {
         // this is date reading
         HOOK_FOREACH(uc, hook, UC_HOOK_MEM_READ) {
             if (hook->to_delete)
                 continue;
             if (!HOOK_BOUND_CHECK(hook, paddr))
                 continue;
+            if (!synced && !uc->skip_sync_pc_on_exit && retaddr) {
+                cpu_restore_state(uc->cpu, retaddr, false);
+                synced = true;
+            }
             JIT_CALLBACK_GUARD(((uc_cb_hookmem_t)hook->callback)(env->uc, UC_MEM_READ, paddr, size, 0, hook->user_data));
             // the last callback may already asked to stop emulation
             if (uc->stop_request)
@@ -1628,6 +1642,10 @@ load_helper(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
                     continue;
                 if (!HOOK_BOUND_CHECK(hook, paddr))
                     continue;
+                if (!synced && !uc->skip_sync_pc_on_exit && retaddr) {
+                    cpu_restore_state(uc->cpu, retaddr, false);
+                    synced = true;
+                }
                 JIT_CALLBACK_GUARD_VAR(handled, 
                                        ((uc_cb_eventmem_t)hook->callback)(uc, UC_MEM_READ_PROT, paddr, size, 0, hook->user_data));
                 if (handled)
@@ -1659,12 +1677,12 @@ load_helper(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
                 if (uc->nested_level > 0 && !uc->cpu->stopped) {
                     cpu_exit(uc->cpu);
                     // See comments above
-                    cpu_loop_exit(uc->cpu);
+                    cpu_loop_exit_restore(uc->cpu, retaddr);
                 }
                 return 0;
             }
         }
-    } else {
+    } else if (code_read) {
         // code fetching
         // Unicorn: callback on fetch from NX
         if (mr != NULL && !(mr->perms & UC_PROT_EXEC)) {  // non-executable
@@ -1674,6 +1692,10 @@ load_helper(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
                     continue;
                 if (!HOOK_BOUND_CHECK(hook, paddr))
                     continue;
+                if (!synced && !uc->skip_sync_pc_on_exit && retaddr) {
+                    cpu_restore_state(uc->cpu, retaddr, false);
+                    synced = true;
+                }
                 JIT_CALLBACK_GUARD_VAR(handled,
                                        ((uc_cb_eventmem_t)hook->callback)(uc, UC_MEM_FETCH_PROT, paddr, size, 0, hook->user_data));
                 if (handled)
@@ -1693,7 +1715,7 @@ load_helper(CPUArchState *env, target_ulong addr, TCGMemOpIdx oi,
                 if (uc->nested_level > 0 && !uc->cpu->stopped) {
                     cpu_exit(uc->cpu);
                     // See comments above
-                    cpu_loop_exit(uc->cpu);
+                    cpu_loop_exit_restore(uc->cpu, retaddr);
                 }
                 return 0;
             }
@@ -1784,6 +1806,10 @@ _out:
                     continue;
                 if (!HOOK_BOUND_CHECK(hook, paddr))
                     continue;
+                if (!synced && !uc->skip_sync_pc_on_exit && retaddr) {
+                    cpu_restore_state(uc->cpu, retaddr, false);
+                    synced = true;
+                }
                 JIT_CALLBACK_GUARD(((uc_cb_hookmem_t)hook->callback)(env->uc, UC_MEM_READ_AFTER, paddr, size, res, hook->user_data));
                 // the last callback may already asked to stop emulation
                 if (uc->stop_request)
@@ -2089,7 +2115,7 @@ store_helper(CPUArchState *env, target_ulong addr, uint64_t val,
     uintptr_t index = tlb_index(env, mmu_idx, addr);
     CPUTLBEntry *entry = tlb_entry(env, mmu_idx, addr);
     target_ulong tlb_addr = tlb_addr_write(entry);
-    target_ulong paddr;
+    hwaddr paddr;
     const size_t tlb_off = offsetof(CPUTLBEntry, addr_write);
     unsigned a_bits = get_alignment_bits(get_memop(oi));
     void *haddr;
@@ -2097,6 +2123,7 @@ store_helper(CPUArchState *env, target_ulong addr, uint64_t val,
     struct hook *hook;
     bool handled;
     MemoryRegion *mr;
+    bool synced = false;
 
     /* Handle CPU specific unaligned behaviour */
     if (addr & ((1 << a_bits) - 1)) {
@@ -2127,6 +2154,10 @@ store_helper(CPUArchState *env, target_ulong addr, uint64_t val,
                 continue;
             if (!HOOK_BOUND_CHECK(hook, paddr))
                 continue;
+            if (!synced && !uc->skip_sync_pc_on_exit && retaddr) {
+                cpu_restore_state(uc->cpu, retaddr, false);
+                synced = true;
+            }
             JIT_CALLBACK_GUARD(((uc_cb_hookmem_t)hook->callback)(uc, UC_MEM_WRITE, paddr, size, val, hook->user_data));
             // the last callback may already asked to stop emulation
             if (uc->stop_request)
@@ -2142,6 +2173,10 @@ store_helper(CPUArchState *env, target_ulong addr, uint64_t val,
                 continue;
             if (!HOOK_BOUND_CHECK(hook, paddr))
                 continue;
+            if (!synced && !uc->skip_sync_pc_on_exit && retaddr) {
+                cpu_restore_state(uc->cpu, retaddr, false);
+                synced = true;
+            }
             JIT_CALLBACK_GUARD_VAR(handled,
                                    ((uc_cb_eventmem_t)hook->callback)(uc, UC_MEM_WRITE_UNMAPPED, paddr, size, val, hook->user_data));
             if (handled)
@@ -2191,6 +2226,10 @@ store_helper(CPUArchState *env, target_ulong addr, uint64_t val,
                 continue;
             if (!HOOK_BOUND_CHECK(hook, paddr))
                 continue;
+            if (!synced && !uc->skip_sync_pc_on_exit && retaddr) {
+                cpu_restore_state(uc->cpu, retaddr, false);
+                synced = true;
+            }
             JIT_CALLBACK_GUARD_VAR(handled,
                                    ((uc_cb_eventmem_t)hook->callback)(uc, UC_MEM_WRITE_PROT, paddr, size, val, hook->user_data));
             if (handled)

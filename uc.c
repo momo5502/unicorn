@@ -36,7 +36,7 @@ static uc_err uc_snapshot(uc_engine *uc);
 static uc_err uc_restore_latest_snapshot(uc_engine *uc);
 
 #if defined(__APPLE__) && defined(HAVE_PTHREAD_JIT_PROTECT) &&                 \
-    defined(HAVE_SPRR) && (defined(__arm__) || defined(__aarch64__))
+    (defined(__arm__) || defined(__aarch64__))
 static void save_jit_state(uc_engine *uc)
 {
     if (!uc->nested) {
@@ -51,7 +51,7 @@ static void restore_jit_state(uc_engine *uc)
 {
     assert(uc->nested > 0);
     if (uc->nested == 1) {
-        assert(uc->current_executable == thread_executable());
+        assert_executable(uc->current_executable);
         if (uc->current_executable != uc->thread_executable_entry) {
             if (uc->thread_executable_entry) {
                 jit_write_protect(true);
@@ -504,6 +504,9 @@ uc_err uc_close(uc_engine *uc)
         return UC_ERR_OK;
     }
 
+    // Flush all translation buffers or we leak memory allocated by MMU
+    uc->tb_flush(uc);
+
     // Cleanup internally.
     if (uc->release) {
         uc->release(uc->tcg_ctx);
@@ -572,7 +575,7 @@ uc_err uc_close(uc_engine *uc)
 }
 
 UNICORN_EXPORT
-uc_err uc_reg_read_batch(uc_engine *uc, int *regs, void **vals, int count)
+uc_err uc_reg_read_batch(uc_engine *uc, int const *regs, void **vals, int count)
 {
     UC_INIT(uc);
     reg_read_t reg_read = uc->reg_read;
@@ -596,7 +599,7 @@ uc_err uc_reg_read_batch(uc_engine *uc, int *regs, void **vals, int count)
 }
 
 UNICORN_EXPORT
-uc_err uc_reg_write_batch(uc_engine *uc, int *regs, void *const *vals,
+uc_err uc_reg_write_batch(uc_engine *uc, int const *regs, void *const *vals,
                           int count)
 {
     UC_INIT(uc);
@@ -627,7 +630,7 @@ uc_err uc_reg_write_batch(uc_engine *uc, int *regs, void *const *vals,
 }
 
 UNICORN_EXPORT
-uc_err uc_reg_read_batch2(uc_engine *uc, int *regs, void *const *vals,
+uc_err uc_reg_read_batch2(uc_engine *uc, int const *regs, void *const *vals,
                           size_t *sizes, int count)
 {
     UC_INIT(uc);
@@ -651,8 +654,8 @@ uc_err uc_reg_read_batch2(uc_engine *uc, int *regs, void *const *vals,
 }
 
 UNICORN_EXPORT
-uc_err uc_reg_write_batch2(uc_engine *uc, int *regs, const void *const *vals,
-                           size_t *sizes, int count)
+uc_err uc_reg_write_batch2(uc_engine *uc, int const *regs,
+                           const void *const *vals, size_t *sizes, int count)
 {
     UC_INIT(uc);
     reg_write_t reg_write = uc->reg_write;
@@ -705,6 +708,7 @@ uc_err uc_reg_write(uc_engine *uc, int regid, const void *value)
     if (setpc) {
         // force to quit execution and flush TB
         uc->quit_request = true;
+        uc->skip_sync_pc_on_exit = true;
         break_translation_loop(uc);
     }
 
@@ -1020,8 +1024,11 @@ uc_err uc_emu_start(uc_engine *uc, uint64_t begin, uint64_t until,
 #endif
 #ifdef UNICORN_HAS_MIPS
     case UC_ARCH_MIPS:
-        // TODO: MIPS32/MIPS64/BIGENDIAN etc
-        uc_reg_write(uc, UC_MIPS_REG_PC, &begin_pc32);
+        if (uc->mode & UC_MODE_MIPS64) {
+            uc_reg_write(uc, UC_MIPS_REG_PC, &begin);
+        } else {
+            uc_reg_write(uc, UC_MIPS_REG_PC, &begin_pc32);
+        }
         break;
 #endif
 #ifdef UNICORN_HAS_SPARC
@@ -1059,7 +1066,7 @@ uc_err uc_emu_start(uc_engine *uc, uint64_t begin, uint64_t until,
         break;
 #endif
     }
-
+    uc->skip_sync_pc_on_exit = false;
     uc->stop_request = false;
 
     uc->emu_count = count;
@@ -1978,8 +1985,13 @@ void helper_uc_tracecode(int32_t size, uc_hook_idx index, void *handle,
         index &
         UC_HOOK_FLAG_MASK; // The index here may contain additional flags. See
                            // the comments of uc_hook_idx for details.
+    // bool not_allow_stop = (size & UC_HOOK_FLAG_NO_STOP) || (hook_flags &
+    // UC_HOOK_FLAG_NO_STOP);
+    bool not_allow_stop = hook_flags & UC_HOOK_FLAG_NO_STOP;
 
     index = index & UC_HOOK_IDX_MASK;
+    // // Like hook index, only low 6 bits of size is used for representing
+    // sizes. size = size & UC_HOOK_IDX_MASK;
 
     // This has been done in tcg code.
     // sync PC in CPUArchState with address
@@ -1988,8 +2000,10 @@ void helper_uc_tracecode(int32_t size, uc_hook_idx index, void *handle,
     // }
 
     // the last callback may already asked to stop emulation
-    if (uc->stop_request && !(hook_flags & UC_HOOK_FLAG_NO_STOP)) {
+    if (uc->stop_request && !not_allow_stop) {
         return;
+    } else if (not_allow_stop && uc->stop_request) {
+        revert_uc_emu_stop(uc);
     }
 
     for (cur = uc->hook[index].head;
@@ -2021,7 +2035,9 @@ void helper_uc_tracecode(int32_t size, uc_hook_idx index, void *handle,
         //   normally. No check_exit_request is generated and the hooks are
         //   triggered normally. In other words, the whole IT block is treated
         //   as a single instruction.
-        if (uc->stop_request && !(hook_flags & UC_HOOK_FLAG_NO_STOP)) {
+        if (not_allow_stop && uc->stop_request) {
+            revert_uc_emu_stop(uc);
+        } else if (!not_allow_stop && uc->stop_request) {
             break;
         }
     }
@@ -2149,7 +2165,8 @@ uc_err uc_context_save(uc_engine *uc, uc_context *context)
         if (!context->fv) {
             return UC_ERR_NOMEM;
         }
-        if (!uc->flatview_copy(uc, context->fv, uc->address_space_memory.current_map, false)) {
+        if (!uc->flatview_copy(uc, context->fv,
+                               uc->address_space_memory.current_map, false)) {
             restore_jit_state(uc);
             return UC_ERR_NOMEM;
         }
@@ -2331,8 +2348,8 @@ uc_err uc_context_reg_read2(uc_context *ctx, int regid, void *value,
 }
 
 UNICORN_EXPORT
-uc_err uc_context_reg_write_batch(uc_context *ctx, int *regs, void *const *vals,
-                                  int count)
+uc_err uc_context_reg_write_batch(uc_context *ctx, int const *regs,
+                                  void *const *vals, int count)
 {
     reg_write_t reg_write = find_context_reg_rw(ctx->arch, ctx->mode).write;
     void *env = ctx->data;
@@ -2354,7 +2371,7 @@ uc_err uc_context_reg_write_batch(uc_context *ctx, int *regs, void *const *vals,
 }
 
 UNICORN_EXPORT
-uc_err uc_context_reg_read_batch(uc_context *ctx, int *regs, void **vals,
+uc_err uc_context_reg_read_batch(uc_context *ctx, int const *regs, void **vals,
                                  int count)
 {
     reg_read_t reg_read = find_context_reg_rw(ctx->arch, ctx->mode).read;
@@ -2376,7 +2393,7 @@ uc_err uc_context_reg_read_batch(uc_context *ctx, int *regs, void **vals,
 }
 
 UNICORN_EXPORT
-uc_err uc_context_reg_write_batch2(uc_context *ctx, int *regs,
+uc_err uc_context_reg_write_batch2(uc_context *ctx, int const *regs,
                                    const void *const *vals, size_t *sizes,
                                    int count)
 {
@@ -2399,8 +2416,8 @@ uc_err uc_context_reg_write_batch2(uc_context *ctx, int *regs,
 }
 
 UNICORN_EXPORT
-uc_err uc_context_reg_read_batch2(uc_context *ctx, int *regs, void *const *vals,
-                                  size_t *sizes, int count)
+uc_err uc_context_reg_read_batch2(uc_context *ctx, int const *regs,
+                                  void *const *vals, size_t *sizes, int count)
 {
     reg_read_t reg_read = find_context_reg_rw(ctx->arch, ctx->mode).read;
     void *env = ctx->data;
@@ -2427,6 +2444,10 @@ uc_err uc_context_restore(uc_engine *uc, uc_context *context)
 
     if (uc->context_content & UC_CTL_CONTEXT_MEMORY) {
         uc->snapshot_level = context->snapshot_level;
+        if (!uc->flatview_copy(uc, uc->address_space_memory.current_map,
+                               context->fv, true)) {
+            return UC_ERR_NOMEM;
+        }
         ret = uc_restore_latest_snapshot(uc);
         if (ret != UC_ERR_OK) {
             restore_jit_state(uc);
@@ -2435,9 +2456,6 @@ uc_err uc_context_restore(uc_engine *uc, uc_context *context)
         uc_snapshot(uc);
         uc->ram_list.freed = context->ramblock_freed;
         uc->ram_list.last_block = context->last_block;
-        if (!uc->flatview_copy(uc, uc->address_space_memory.current_map, context->fv, true)) {
-            return UC_ERR_NOMEM;
-        }
         uc->tcg_flush_tlb(uc);
     }
 
@@ -2541,7 +2559,7 @@ uc_err uc_ctl(uc_engine *uc, uc_control_type control, ...)
                 break;
             }
 
-            if (uc->arch != UC_ARCH_ARM) {
+            if (uc->arch != UC_ARCH_ARM && uc->arch != UC_ARCH_ARM64) {
                 err = UC_ERR_ARG;
                 break;
             }

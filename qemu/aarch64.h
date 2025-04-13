@@ -4,6 +4,7 @@
 #ifndef UNICORN_ARCH_POSTFIX
 #define UNICORN_ARCH_POSTFIX _aarch64
 #endif
+#define gen_helper_check_exit_request gen_helper_check_exit_request_aarch64
 #define unicorn_fill_tlb unicorn_fill_tlb_aarch64
 #define reg_read reg_read_aarch64
 #define reg_write reg_write_aarch64
@@ -1290,6 +1291,8 @@
 #define gen_helper_cpsr_read gen_helper_cpsr_read_aarch64
 #define gen_helper_cpsr_write gen_helper_cpsr_write_aarch64
 #define tlb_reset_dirty_by_vaddr tlb_reset_dirty_by_vaddr_aarch64
+#define helper_stqcx_le_parallel helper_stqcx_le_parallel_aarch64
+#define helper_stqcx_be_parallel helper_stqcx_be_parallel_aarch64
 #define cpu_aarch64_init cpu_aarch64_init_aarch64
 #define arm_cpu_exec_interrupt arm_cpu_exec_interrupt_aarch64
 #define arm_cpu_update_virq arm_cpu_update_virq_aarch64
