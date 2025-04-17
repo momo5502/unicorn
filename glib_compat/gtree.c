@@ -34,6 +34,8 @@
 #include "gmessages.h"
 #include "gnode.h"
 
+#include <stdio.h>
+
 /**
  * SECTION:trees-binary
  * @title: Balanced Binary Trees
@@ -156,11 +158,16 @@ static GTreeNode *g_tree_node_new (gpointer key, gpointer value)
  * 
  * Returns: a newly allocated #GTree
  */
+static gint  data_wrapper (gconstpointer a, gconstpointer b, gpointer user_data)
+{
+    return ((GCompareFunc)user_data)(a, b);
+}
+
 GTree *g_tree_new (GCompareFunc key_compare_func)
 {
     g_return_val_if_fail (key_compare_func != NULL, NULL);
 
-    return g_tree_new_full ((GCompareDataFunc) key_compare_func, NULL,
+    return g_tree_new_full (data_wrapper, key_compare_func,
             NULL, NULL);
 }
 
@@ -433,23 +440,26 @@ static void g_tree_insert_internal (GTree *tree, gpointer key, gpointer value, g
 
         if (cmp == 0)
         {
-            if (tree->value_destroy_func)
+            if (tree->value_destroy_func){
                 tree->value_destroy_func (node->value);
+            }
 
             node->value = value;
 
             if (replace)
             {
-                if (tree->key_destroy_func)
+                if (tree->key_destroy_func){
                     tree->key_destroy_func (node->key);
+                }
 
                 node->key = key;
             }
             else
             {
                 /* free the passed key */
-                if (tree->key_destroy_func)
+                if (tree->key_destroy_func){
                     tree->key_destroy_func (key);
+                }
             }
 
             return;

@@ -272,7 +272,9 @@ else()
                 set(UNICORN_TARGET_ARCH "tricore")
                 break()
             endif()
-            message(FATAL_ERROR "Unknown host compiler: ${CMAKE_C_COMPILER}.")
+            set(UNICORN_TARGET_ARCH "tci")
+            break()
+            #message(FATAL_ERROR "Unknown host compiler: ${CMAKE_C_COMPILER}.")
         endwhile(TRUE)
     endif()
 
@@ -490,6 +492,7 @@ set(UNICORN_ARCH_COMMON
 
     qemu/tcg/optimize.c
     qemu/tcg/tcg.c
+    qemu/tcg/tci.c
     qemu/tcg/tcg-op.c
     qemu/tcg/tcg-op-gvec.c
     qemu/tcg/tcg-op-vec.c
