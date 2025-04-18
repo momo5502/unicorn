@@ -664,6 +664,7 @@ static void process_op_defs(TCGContext *s);
 static TCGTemp *tcg_global_reg_new_internal(TCGContext *s, TCGType type,
                                             TCGReg reg, const char *name);
 
+#ifdef __EMSCRIPTEN__
 static void forward_inline_hook(uc_engine *uc, uint64_t address, uint32_t size, void *user_data) {
     struct hook* hk = (struct hook *)user_data;
    ((uc_cb_hookcode_t)hk->callback)(uc, address, size, hk->user_data);
@@ -678,6 +679,7 @@ static uint64_t run_inline_hook(size_t a1, size_t a2, size_t a3, size_t a4, size
     forward_inline_hook((uc_engine*)a1, (a2 | ((uint64_t)a3 << 32)), a4, (void*)a5);
     return 0;
 }
+#endif
 
 void uc_add_inline_hook(uc_engine *uc, struct hook *hk, void** args, int args_len)
 {
@@ -687,7 +689,11 @@ void uc_add_inline_hook(uc_engine *uc, struct hook *hk, void** args, int args_le
     TCGContext *tcg_ctx = uc->tcg_ctx;
     GHashTable *helper_table = uc->tcg_ctx->helper_table;
 
+#ifdef __EMSCRIPTEN__
     info->func = &run_inline_hook;
+#else
+    info->func = hk->callback;
+#endif
     info->name = name;
     info->flags = 0; // From helper-head.h
 
