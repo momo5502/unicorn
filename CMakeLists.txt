@@ -363,7 +363,12 @@ else()
     set(TARGET_LIST "${TARGET_LIST} ")
 
     # GEN config-host.mak & target directories
-    execute_process(COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/qemu/configure
+    set(CONFIGURE_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/qemu/configure)
+    if(CMAKE_SYSTEM_NAME MATCHES "Emscripten")
+        set(CONFIGURE_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/qemu/configure-emscripten)
+    endif()
+
+    execute_process(COMMAND sh ${CONFIGURE_SCRIPT}
         --cc=${CMAKE_C_COMPILER}
         ${EXTRA_CFLAGS}
         ${TARGET_LIST}
