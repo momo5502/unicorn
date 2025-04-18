@@ -78,10 +78,10 @@
     static inline void glue(gen_helper_, name)(                                \
         TCGContext * tcg_ctx, dh_retvar_decl(ret) dh_arg_decl(t1, 1),          \
         dh_arg_decl(t2, 2), dh_arg_decl(t3, 3), dh_arg_decl(t4, 4),            \
-        dh_arg_decl(t5, 5), dh_arg_decl(t5, 6))                                \
+        dh_arg_decl(t5, 5), dh_arg_decl(t6, 6))                                \
     {                                                                          \
         TCGTemp *args[6] = {dh_arg(t1, 1), dh_arg(t2, 2), dh_arg(t3, 3),       \
-                            dh_arg(t4, 4), dh_arg(t5, 5), dh_arg(t5, 6)};      \
+                            dh_arg(t4, 4), dh_arg(t5, 5), dh_arg(t6, 6)};      \
         tcg_gen_callN(tcg_ctx, glue(adapter_helper_, name), dh_retvar(ret), 6, \
                       args);                                                   \
     }
@@ -94,8 +94,8 @@
         dh_arg_decl(t5, 5), dh_arg_decl(t5, 6), dh_arg_decl(t5, 7))            \
     {                                                                          \
         TCGTemp *args[7] = {dh_arg(t1, 1), dh_arg(t2, 2), dh_arg(t3, 3),       \
-                            dh_arg(t4, 4), dh_arg(t5, 5), dh_arg(t5, 6),       \
-                            dh_arg(t5, 7)};                                    \
+                            dh_arg(t4, 4), dh_arg(t5, 5), dh_arg(t6, 6),       \
+                            dh_arg(t7, 7)};                                    \
         tcg_gen_callN(tcg_ctx, glue(adapter_helper_, name), dh_retvar(ret), 7, \
                       args);                                                   \
     }

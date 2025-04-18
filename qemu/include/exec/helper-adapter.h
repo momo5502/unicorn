@@ -82,7 +82,7 @@
     HELPER(name)(SELECT_ARG(dh_ctype(t1), A1));                                \
     return 0;
 #define GEN_ADAPTER_1_NONVOID(name, t1)                                        \
-    return HELPER(name)(SELECT_ARG(dh_ctype(t1), A1));
+    return (uint64_t)HELPER(name)(SELECT_ARG(dh_ctype(t1), A1));
 #define GEN_ADAPTER_1_DEFINE(name, ret, t1)                                    \
     uint64_t glue(adapter_helper_, name)(GEN_ADAPTER_ARGS)                     \
     {                                                                          \
@@ -96,8 +96,8 @@
     HELPER(name)(SELECT_ARG(dh_ctype(t1), A1), SELECT_ARG(dh_ctype(t2), A2));  \
     return 0;
 #define GEN_ADAPTER_2_NONVOID(name, t1, t2)                                    \
-    return HELPER(name)(SELECT_ARG(dh_ctype(t1), A1),                          \
-                        SELECT_ARG(dh_ctype(t2), A2));
+    return (uint64_t)HELPER(name)(SELECT_ARG(dh_ctype(t1), A1),                \
+                                  SELECT_ARG(dh_ctype(t2), A2));
 #define GEN_ADAPTER_2_DEFINE(name, ret, t1, t2)                                \
     uint64_t glue(adapter_helper_, name)(GEN_ADAPTER_ARGS)                     \
     {                                                                          \
@@ -113,9 +113,9 @@
                  SELECT_ARG(dh_ctype(t3), A3));                                \
     return 0;
 #define GEN_ADAPTER_3_NONVOID(name, t1, t2, t3)                                \
-    return HELPER(name)(SELECT_ARG(dh_ctype(t1), A1),                          \
-                        SELECT_ARG(dh_ctype(t2), A2),                          \
-                        SELECT_ARG(dh_ctype(t3), A3));
+    return (uint64_t)HELPER(name)(SELECT_ARG(dh_ctype(t1), A1),                \
+                                  SELECT_ARG(dh_ctype(t2), A2),                \
+                                  SELECT_ARG(dh_ctype(t3), A3));
 #define GEN_ADAPTER_3_DEFINE(name, ret, t1, t2, t3)                            \
     uint64_t glue(adapter_helper_, name)(GEN_ADAPTER_ARGS)                     \
     {                                                                          \
@@ -132,7 +132,7 @@
                  SELECT_ARG(dh_ctype(t3), A3), SELECT_ARG(dh_ctype(t4), A4));  \
     return 0;
 #define GEN_ADAPTER_4_NONVOID(name, t1, t2, t3, t4)                            \
-    return HELPER(name)(                                                       \
+    return (uint64_t)HELPER(name)(                                             \
         SELECT_ARG(dh_ctype(t1), A1), SELECT_ARG(dh_ctype(t2), A2),            \
         SELECT_ARG(dh_ctype(t3), A3), SELECT_ARG(dh_ctype(t4), A4));
 #define GEN_ADAPTER_4_DEFINE(name, ret, t1, t2, t3, t4)                        \
@@ -153,7 +153,7 @@
                  SELECT_ARG(dh_ctype(t5), A5));                                \
     return 0;
 #define GEN_ADAPTER_5_NONVOID(name, t1, t2, t3, t4, t5)                        \
-    return HELPER(name)(                                                       \
+    return (uint64_t)HELPER(name)(                                             \
         SELECT_ARG(dh_ctype(t1), A1), SELECT_ARG(dh_ctype(t2), A2),            \
         SELECT_ARG(dh_ctype(t3), A3), SELECT_ARG(dh_ctype(t4), A4),            \
         SELECT_ARG(dh_ctype(t5), A5));
@@ -176,7 +176,7 @@
                  SELECT_ARG(dh_ctype(t5), A5), SELECT_ARG(dh_ctype(t6), A6));  \
     return 0;
 #define GEN_ADAPTER_6_NONVOID(name, t1, t2, t3, t4, t5, t6)                    \
-    return HELPER(name)(                                                       \
+    return (uint64_t)HELPER(name)(                                             \
         SELECT_ARG(dh_ctype(t1), A1), SELECT_ARG(dh_ctype(t2), A2),            \
         SELECT_ARG(dh_ctype(t3), A3), SELECT_ARG(dh_ctype(t4), A4),            \
         SELECT_ARG(dh_ctype(t5), A5), SELECT_ARG(dh_ctype(t6), A6));
@@ -201,7 +201,7 @@
                  SELECT_ARG(dh_ctype(t7), A7));                                \
     return 0;
 #define GEN_ADAPTER_7_NONVOID(name, t1, t2, t3, t4, t5, t6, t7)                \
-    return HELPER(name)(                                                       \
+    return (uint64_t)HELPER(name)(                                             \
         SELECT_ARG(dh_ctype(t1), A1), SELECT_ARG(dh_ctype(t2), A2),            \
         SELECT_ARG(dh_ctype(t3), A3), SELECT_ARG(dh_ctype(t4), A4),            \
         SELECT_ARG(dh_ctype(t5), A5), SELECT_ARG(dh_ctype(t6), A6),            \
