@@ -46,22 +46,25 @@
 
 #define GEN_ADAPTER_ARGS_ARRAY                                                 \
     int current_arg = 0;                                                       \
+    uint64_t temp_arg_val = 0;                                                 \
     size_t arg_arr[] = {a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12};
 
-#define SELECT_NEXT_PARTIAL_ARG() (arg_arr[current_arg++])
+#define GET_NEXT_ARG() (arg_arr[current_arg++])
 
 #if UINTPTR_MAX == UINT32_MAX
-#define SELECT_NEXT_FULL_ARG()                                                 \
-    (SELECT_NEXT_PARTIAL_ARG() | ((uint64_t)(SELECT_NEXT_PARTIAL_ARG()) << 32))
-
-#define SELECT_NEXT_ARG(type)                                                  \
-    ((sizeof(type) <= sizeof(uint32_t)) ? ((type)SELECT_NEXT_PARTIAL_ARG())    \
-                                        : ((type)SELECT_NEXT_FULL_ARG()))
+#define ASSIGN_NEXT_ARG(type)                                                  \
+    temp_arg_val = GET_NEXT_ARG();                                             \
+    if (sizeof(type) > sizeof(uint32_t)) {                                     \
+        temp_arg_val |= (((uint64_t)(GET_NEXT_ARG())) << 32);                  \
+    }
 #else
-#define SELECT_NEXT_ARG(type) ((type)SELECT_NEXT_PARTIAL_ARG())
+#define ASSIGN_NEXT_ARG(type) temp_arg_val = GET_NEXT_ARG();
 #endif
 
-#define SELECT_ARG(type, index) SELECT_NEXT_ARG(type)
+#define SELECT_ARG(type, index) index
+#define ASSIGN_ARG(type, index)                                                \
+    ASSIGN_NEXT_ARG(type)                                                      \
+    type index = (type)temp_arg_val;
 
 // Adapter definition
 #define GEN_ADAPTER_0_VOID(name)                                               \
@@ -84,6 +87,7 @@
     uint64_t glue(adapter_helper_, name)(GEN_ADAPTER_ARGS)                     \
     {                                                                          \
         GEN_ADAPTER_ARGS_ARRAY                                                 \
+        ASSIGN_ARG(dh_ctype(t1), A1);                                          \
         IIF(IS_VOID(ret))(GEN_ADAPTER_1_VOID(name, t1),                        \
                           GEN_ADAPTER_1_NONVOID(name, t1))                     \
     }
@@ -98,6 +102,8 @@
     uint64_t glue(adapter_helper_, name)(GEN_ADAPTER_ARGS)                     \
     {                                                                          \
         GEN_ADAPTER_ARGS_ARRAY                                                 \
+        ASSIGN_ARG(dh_ctype(t1), A1);                                          \
+        ASSIGN_ARG(dh_ctype(t2), A2);                                          \
         IIF(IS_VOID(ret))(GEN_ADAPTER_2_VOID(name, t1, t2),                    \
                           GEN_ADAPTER_2_NONVOID(name, t1, t2))                 \
     }
@@ -114,6 +120,9 @@
     uint64_t glue(adapter_helper_, name)(GEN_ADAPTER_ARGS)                     \
     {                                                                          \
         GEN_ADAPTER_ARGS_ARRAY                                                 \
+        ASSIGN_ARG(dh_ctype(t1), A1);                                          \
+        ASSIGN_ARG(dh_ctype(t2), A2);                                          \
+        ASSIGN_ARG(dh_ctype(t3), A3);                                          \
         IIF(IS_VOID(ret))(GEN_ADAPTER_3_VOID(name, t1, t2, t3),                \
                           GEN_ADAPTER_3_NONVOID(name, t1, t2, t3))             \
     }
@@ -130,6 +139,10 @@
     uint64_t glue(adapter_helper_, name)(GEN_ADAPTER_ARGS)                     \
     {                                                                          \
         GEN_ADAPTER_ARGS_ARRAY                                                 \
+        ASSIGN_ARG(dh_ctype(t1), A1);                                          \
+        ASSIGN_ARG(dh_ctype(t2), A2);                                          \
+        ASSIGN_ARG(dh_ctype(t3), A3);                                          \
+        ASSIGN_ARG(dh_ctype(t4), A4);                                          \
         IIF(IS_VOID(ret))(GEN_ADAPTER_4_VOID(name, t1, t2, t3, t4),            \
                           GEN_ADAPTER_4_NONVOID(name, t1, t2, t3, t4))         \
     }
@@ -148,6 +161,11 @@
     uint64_t glue(adapter_helper_, name)(GEN_ADAPTER_ARGS)                     \
     {                                                                          \
         GEN_ADAPTER_ARGS_ARRAY                                                 \
+        ASSIGN_ARG(dh_ctype(t1), A1);                                          \
+        ASSIGN_ARG(dh_ctype(t2), A2);                                          \
+        ASSIGN_ARG(dh_ctype(t3), A3);                                          \
+        ASSIGN_ARG(dh_ctype(t4), A4);                                          \
+        ASSIGN_ARG(dh_ctype(t5), A5);                                          \
         IIF(IS_VOID(ret))(GEN_ADAPTER_5_VOID(name, t1, t2, t3, t4, t5),        \
                           GEN_ADAPTER_5_NONVOID(name, t1, t2, t3, t4, t5))     \
     }
@@ -166,6 +184,12 @@
     uint64_t glue(adapter_helper_, name)(GEN_ADAPTER_ARGS)                     \
     {                                                                          \
         GEN_ADAPTER_ARGS_ARRAY                                                 \
+        ASSIGN_ARG(dh_ctype(t1), A1);                                          \
+        ASSIGN_ARG(dh_ctype(t2), A2);                                          \
+        ASSIGN_ARG(dh_ctype(t3), A3);                                          \
+        ASSIGN_ARG(dh_ctype(t4), A4);                                          \
+        ASSIGN_ARG(dh_ctype(t5), A5);                                          \
+        ASSIGN_ARG(dh_ctype(t6), A6);                                          \
         IIF(IS_VOID(ret))(GEN_ADAPTER_6_VOID(name, t1, t2, t3, t4, t5, t6),    \
                           GEN_ADAPTER_6_NONVOID(name, t1, t2, t3, t4, t5, t6)) \
     }
@@ -186,6 +210,13 @@
     uint64_t glue(adapter_helper_, name)(GEN_ADAPTER_ARGS)                     \
     {                                                                          \
         GEN_ADAPTER_ARGS_ARRAY                                                 \
+        ASSIGN_ARG(dh_ctype(t1), A1);                                          \
+        ASSIGN_ARG(dh_ctype(t2), A2);                                          \
+        ASSIGN_ARG(dh_ctype(t3), A3);                                          \
+        ASSIGN_ARG(dh_ctype(t4), A4);                                          \
+        ASSIGN_ARG(dh_ctype(t5), A5);                                          \
+        ASSIGN_ARG(dh_ctype(t6), A6);                                          \
+        ASSIGN_ARG(dh_ctype(t7), A7);                                          \
         IIF(IS_VOID(ret))(                                                     \
             GEN_ADAPTER_7_VOID(name, t1, t2, t3, t4, t5, t6, t7),              \
             GEN_ADAPTER_7_NONVOID(name, t1, t2, t3, t4, t5, t6, t7))           \

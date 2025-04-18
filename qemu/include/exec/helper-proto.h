@@ -7,10 +7,10 @@
 #include "exec/helper-head.h"
 
 
-#define GEN_ADAPTER_ARGS \
-  uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5, \
-  uint32_t a6, uint32_t a7, uint32_t a8, uint32_t a9, uint32_t a10, uint32_t a11, uint32_t a12
-
+#define GEN_ADAPTER_ARGS                                                       \
+    size_t a1, size_t a2, size_t a3, size_t a4, size_t a5, size_t a6,          \
+        size_t a7, size_t a8, size_t a9, size_t a10, size_t a11, size_t a12
+        
 #define GEN_ADAPTER_DECLARE(name) \
     uint64_t glue(adapter_helper_, name)(GEN_ADAPTER_ARGS);
 
