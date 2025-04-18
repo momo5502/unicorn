@@ -709,7 +709,7 @@ void uc_add_inline_hook(uc_engine *uc, struct hook *hk, void** args, int args_le
     info->sizemask = sizemask;
 
     g_hash_table_insert(helper_table, (gpointer)info->func, (gpointer)info);
-    g_hash_table_insert(uc->tcg_ctx->custom_helper_infos, (gpointer)info->func, (gpointer)info);
+    g_hash_table_insert(uc->tcg_ctx->custom_helper_infos, (gpointer)hk, (gpointer)info);
 
     tcg_gen_callN(tcg_ctx, info->func, NULL, args_len, (TCGTemp**)args);
 }
@@ -724,7 +724,7 @@ static void uc_free_inline_hook_info(void *p)
 
 void uc_del_inline_hook(uc_engine *uc, struct hook *hk)
 {
-    g_hash_table_remove(uc->tcg_ctx->custom_helper_infos, hk->callback);
+    g_hash_table_remove(uc->tcg_ctx->custom_helper_infos, hk);
 }
 
 void tcg_context_init(TCGContext *s)
