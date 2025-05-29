@@ -84,17 +84,26 @@ static inline void assert_executable(bool executable) {
 
 #else
 
-__attribute__((unused)) static inline uint8_t thread_mask() 
+#ifndef _WIN32
+__attribute__((unused))
+#endif
+static inline uint8_t thread_mask()
 {
     return 0;
 }
 
-__attribute__((unused)) static inline bool thread_writeable()
+#ifndef _WIN32
+__attribute__((unused))
+#endif
+static inline bool thread_writeable()
 {
     return false;
 }
 
-__attribute__((unused)) static inline bool thread_executable()
+#ifndef _WIN32
+__attribute__((unused))
+#endif
+static inline bool thread_executable()
 {
     return false;
 }
