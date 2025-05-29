@@ -25,18 +25,17 @@
 #ifndef TCG_APPLE_JIT_H
 #define TCG_APPLE_JIT_H
 
-#if defined(__APPLE__) && defined(HAVE_PTHREAD_JIT_PROTECT) && defined(HAVE_SPRR) && (defined(__arm__) || defined(__aarch64__))
-
-/* write protect enable = write disable */
-static inline void jit_write_protect(int enabled)
-{
-    return pthread_jit_write_protect_np(enabled);
-}
+#include "assert.h"
+#include "stdint.h"
+#include "stdlib.h"
+#include "stdbool.h"
 
 // Returns the S3_6_c15_c1_5 register's value
 // Taken from 
 // https://stackoverflow.com/questions/70019553/lldb-how-to-read-the-permissions-of-a-memory-region-for-a-thread
 // https://blog.svenpeter.dev/posts/m1_sprr_gxf/
+// On Github Action (Virtualized environment), this shall always returns 0
+#if defined(HAVE_SPRR_MRS)
 static inline uint64_t read_sprr_perm(void)
 {
     uint64_t v;
@@ -45,12 +44,24 @@ static inline uint64_t read_sprr_perm(void)
                          : "=r"(v)::"memory");
     return v;
 }
+#else
+static inline uint64_t read_sprr_perm(void)
+{
+    return 0;
+}
+#endif
+
+#if defined(__APPLE__) && defined(HAVE_PTHREAD_JIT_PROTECT) && (defined(__arm__) || defined(__aarch64__))
 
 __attribute__((unused)) static inline uint8_t thread_mask() 
 {
     uint64_t v = read_sprr_perm();
 
-    return (v >> 20) & 3;
+    if (v == 0) {
+        return 0;
+    } else {
+        return (v >> 20) & 3;
+    }
 }
 
 __attribute__((unused)) static inline bool thread_writeable()
@@ -63,25 +74,60 @@ __attribute__((unused)) static inline bool thread_executable()
     return thread_mask() == 1;
 }
 
+static inline void assert_executable(bool executable) {
+    uint64_t v = read_sprr_perm();
+
+    if (!v) {
+        assert(executable == thread_executable());
+    }
+}
+
+#else
+
+__attribute__((unused)) static inline uint8_t thread_mask() 
+{
+    return 0;
+}
+
+__attribute__((unused)) static inline bool thread_writeable()
+{
+    return false;
+}
+
+__attribute__((unused)) static inline bool thread_executable()
+{
+    return false;
+}
+
+static inline void assert_executable(bool executable) {
+}
+
+#endif
+
+
+#if defined(__APPLE__) && defined(HAVE_PTHREAD_JIT_PROTECT) && (defined(__arm__) || defined(__aarch64__))
+
+/* write protect enable = write disable */
+static inline void jit_write_protect(int enabled)
+{
+    return pthread_jit_write_protect_np(enabled);
+}
+
 #define JIT_CALLBACK_GUARD(x)                       \
 {                                                   \
     bool executable = uc->current_executable;       \
-    assert (executable == thread_executable());     \
+    assert_executable(executable);                  \
     x;                                              \
-    if (executable != thread_executable()) {        \
-        jit_write_protect(executable);              \
-    }                                               \
+    jit_write_protect(executable);                  \
 }                                                   \
 
 
 #define JIT_CALLBACK_GUARD_VAR(var, x)                  \
 {                                                       \
     bool executable = uc->current_executable;           \
-    assert (executable == thread_executable());         \
+    assert_executable(executable);                      \
     var = x;                                            \
-    if (executable != thread_executable()) {            \
-        jit_write_protect(executable);                  \
-    }                                                   \
+    jit_write_protect(executable);                      \
 }                                                       \
 
 
