@@ -77,7 +77,7 @@ __attribute__((unused)) static inline bool thread_executable()
 static inline void assert_executable(bool executable) {
     uint64_t v = read_sprr_perm();
 
-    if (!v) {
+    if (v) {
         assert(executable == thread_executable());
     }
 }
