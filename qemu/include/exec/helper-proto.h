@@ -6,10 +6,17 @@
 
 #include "exec/helper-head.h"
 
-
+#if UINTPTR_MAX == UINT32_MAX
 #define GEN_ADAPTER_ARGS                                                       \
     size_t a1, size_t a2, size_t a3, size_t a4, size_t a5, size_t a6,          \
         size_t a7, size_t a8, size_t a9, size_t a10, size_t a11, size_t a12
+
+#else
+
+#define GEN_ADAPTER_ARGS                                                       \
+    size_t a1, size_t a2, size_t a3, size_t a4, size_t a5, size_t a6
+
+#endif
         
 #define GEN_ADAPTER_DECLARE(name) \
     uint64_t glue(adapter_helper_, name)(GEN_ADAPTER_ARGS);
@@ -57,7 +64,7 @@ dh_ctype(ret) HELPER(name) (dh_ctype(t1), dh_ctype(t2), dh_ctype(t3), \
 
 
                        
-    #define DEF_HELPER_FLAGS_7(name, flags, ret, t1, t2, t3, t4, t5,t6,t7) \
+    #define DEF_HELPER_FLAGS_7(name, flags, ret, t1, t2, t3, t4, t5,t6, t7) \
     GEN_ADAPTER_DECLARE(name) \
 dh_ctype(ret) HELPER(name) (dh_ctype(t1), dh_ctype(t2), dh_ctype(t3), \
                        dh_ctype(t4), dh_ctype(t5), dh_ctype(t6), dh_ctype(t7));

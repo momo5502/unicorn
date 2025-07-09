@@ -40,6 +40,7 @@
 #define IS_GLOB(name) 0 // CHECK(GLOB_PROBE(name))
 
 // Arguments
+#if UINTPTR_MAX == UINT32_MAX
 #define GEN_ADAPTER_ARGS                                                       \
     size_t a1, size_t a2, size_t a3, size_t a4, size_t a5, size_t a6,          \
         size_t a7, size_t a8, size_t a9, size_t a10, size_t a11, size_t a12
@@ -48,6 +49,17 @@
     int current_arg = 0;                                                       \
     uint64_t temp_arg_val = 0;                                                 \
     size_t arg_arr[] = {a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12};
+
+#else
+
+#define GEN_ADAPTER_ARGS                                                       \
+    size_t a1, size_t a2, size_t a3, size_t a4, size_t a5, size_t a6
+
+#define GEN_ADAPTER_ARGS_ARRAY                                                 \
+    int current_arg = 0;                                                       \
+    uint64_t temp_arg_val = 0;                                                 \
+    size_t arg_arr[] = {a1, a2, a3, a4, a5, a6};
+#endif
 
 #define GET_NEXT_ARG() (arg_arr[current_arg++])
 

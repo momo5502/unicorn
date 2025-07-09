@@ -670,7 +670,11 @@ static void forward_inline_hook(uc_engine *uc, uint64_t address, uint32_t size, 
    ((uc_cb_hookcode_t)hk->callback)(uc, address, size, hk->user_data);
 }
 
-static uint64_t run_inline_hook(size_t a1, size_t a2, size_t a3, size_t a4, size_t a5, size_t a6, size_t a7, size_t a8, size_t a9, size_t a10, size_t a11, size_t a12) {
+static uint64_t run_inline_hook(size_t a1, size_t a2, size_t a3, size_t a4, size_t a5, size_t a6
+#if TCG_TARGET_REG_BITS == 32
+    , size_t a7, size_t a8, size_t a9, size_t a10, size_t a11, size_t a12
+#endif
+) {
     if (sizeof(a1) == sizeof(uint64_t)) {
         forward_inline_hook((uc_engine*)a1, a2, (uint32_t)a3, (void*)a4);
         return 0;
