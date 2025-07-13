@@ -671,6 +671,27 @@ static void process_op_defs(TCGContext *s);
 static TCGTemp *tcg_global_reg_new_internal(TCGContext *s, TCGType type,
                                             TCGReg reg, const char *name);
 
+#ifdef __EMSCRIPTEN__
+static void forward_inline_hook(uc_engine *uc, uint64_t address, uint32_t size, void *user_data) {
+    struct hook* hk = (struct hook *)user_data;
+   ((uc_cb_hookcode_t)hk->callback)(uc, address, size, hk->user_data);
+}
+
+static uint64_t run_inline_hook(size_t a1, size_t a2, size_t a3, size_t a4, size_t a5, size_t a6
+#if TCG_TARGET_REG_BITS == 32
+    , size_t a7, size_t a8, size_t a9, size_t a10, size_t a11, size_t a12
+#endif
+) {
+    if (sizeof(a1) == sizeof(uint64_t)) {
+        forward_inline_hook((uc_engine*)a1, a2, (uint32_t)a3, (void*)a4);
+        return 0;
+    }
+
+    forward_inline_hook((uc_engine*)a1, (a2 | ((uint64_t)a3 << 32)), a4, (void*)a5);
+    return 0;
+}
+#endif
+
 void uc_add_inline_hook(uc_engine *uc, struct hook *hk, void** args, int args_len)
 {
     TCGHelperInfo* info = g_malloc(sizeof(TCGHelperInfo));
@@ -679,7 +700,11 @@ void uc_add_inline_hook(uc_engine *uc, struct hook *hk, void** args, int args_le
     TCGContext *tcg_ctx = uc->tcg_ctx;
     GHashTable *helper_table = uc->tcg_ctx->helper_table;
 
+#ifdef __EMSCRIPTEN__
+    info->func = &run_inline_hook;
+#else
     info->func = hk->callback;
+#endif
     info->name = name;
     info->flags = 0; // From helper-head.h
 
@@ -701,7 +726,7 @@ void uc_add_inline_hook(uc_engine *uc, struct hook *hk, void** args, int args_le
     info->sizemask = sizemask;
 
     g_hash_table_insert(helper_table, (gpointer)info->func, (gpointer)info);
-    g_hash_table_insert(uc->tcg_ctx->custom_helper_infos, (gpointer)info->func, (gpointer)info);
+    g_hash_table_insert(uc->tcg_ctx->custom_helper_infos, (gpointer)hk, (gpointer)info);
 
     tcg_gen_callN(tcg_ctx, info->func, NULL, args_len, (TCGTemp**)args);
 }
@@ -716,7 +741,7 @@ static void uc_free_inline_hook_info(void *p)
 
 void uc_del_inline_hook(uc_engine *uc, struct hook *hk)
 {
-    g_hash_table_remove(uc->tcg_ctx->custom_helper_infos, hk->callback);
+    g_hash_table_remove(uc->tcg_ctx->custom_helper_infos, hk);
 }
 
 void tcg_context_init(TCGContext *s)

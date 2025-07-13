@@ -53,7 +53,11 @@ static inline void gen_uc_tracecode(TCGContext *tcg_ctx, int32_t size, int32_t t
         while (cur) {
             hk = cur->data;
             if (!hk->to_delete) {
+                #ifdef __EMSCRIPTEN__
+                tdata = tcg_const_ptr(tcg_ctx, hk);
+                #else
                 tdata = tcg_const_ptr(tcg_ctx, hk->user_data);
+                #endif
                 args[3] = tcgv_ptr_temp(tcg_ctx, tdata);
                 puc->add_inline_hook(uc, hk, (void**)args, 4);
                 tcg_temp_free_ptr(tcg_ctx, tdata);

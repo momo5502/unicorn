@@ -278,7 +278,9 @@ else()
                 set(UNICORN_TARGET_ARCH "loongarch64")
                 break()
             endif()
-            message(FATAL_ERROR "Unknown host compiler: ${CMAKE_C_COMPILER}.")
+            set(UNICORN_TARGET_ARCH "tci")
+            break()
+            #message(FATAL_ERROR "Unknown host compiler: ${CMAKE_C_COMPILER}.")
         endwhile(TRUE)
     endif()
 
@@ -367,13 +369,12 @@ else()
     set(TARGET_LIST "${TARGET_LIST} ")
 
     # GEN config-host.mak & target directories
-    # MESSAGE(STATUS "sh ${CMAKE_CURRENT_SOURCE_DIR}/qemu/configure
-    #     --cc=${CMAKE_C_COMPILER}
-    #     ${EXTRA_CFLAGS}
-    #     ${TARGET_LIST}
-    #     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}"
-    # )
-    execute_process(COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/qemu/configure
+    set(CONFIGURE_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/qemu/configure)
+    if(CMAKE_SYSTEM_NAME MATCHES "Emscripten")
+        set(CONFIGURE_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/qemu/configure-emscripten)
+    endif()
+
+    execute_process(COMMAND sh ${CONFIGURE_SCRIPT}
         --cc=${CMAKE_C_COMPILER}
         ${EXTRA_CFLAGS}
         ${TARGET_LIST}
@@ -517,6 +518,10 @@ set(UNICORN_ARCH_COMMON
 
     qemu/softmmu/unicorn_vtlb.c
 )
+
+if(UNICORN_TARGET_ARCH STREQUAL "tci")
+  set(UNICORN_ARCH_COMMON ${UNICORN_ARCH_COMMON} qemu/tcg/tci.c)
+endif()
 
 if(UNICORN_HAS_X86)
 add_library(x86_64-softmmu STATIC

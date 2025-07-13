@@ -179,6 +179,16 @@ static void *qemu_ram_mmap(struct uc_struct *uc,
                     size_t align,
                     bool shared)
 {
+#ifdef __EMSCRIPTEN__
+    void* ptr_ = calloc(1, size + (align * 2));
+    size_t int_ptr = (size_t)ptr_;
+    int_ptr += sizeof(void*);
+    int_ptr += (align - 1);
+    int_ptr &= ~(align - 1);
+    memcpy((void*)(int_ptr - sizeof(void*)), &ptr_, sizeof(void*));
+    return (void*)int_ptr;
+#endif
+
     int flags;
     int map_sync_flags = 0;
     int guardfd;
@@ -269,6 +279,11 @@ static void *qemu_ram_mmap(struct uc_struct *uc,
 
 static void qemu_ram_munmap(struct uc_struct *uc, void *ptr, size_t size)
 {
+    #ifdef __EMSCRIPTEN__
+    free(((void**)ptr)[-1]);
+    return;
+    #endif
+
     size_t pagesize;
 
     if (ptr) {
