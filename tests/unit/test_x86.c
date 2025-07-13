@@ -52,7 +52,12 @@ static void QuickTest_run(QuickTest *test)
         OK(uc_reg_write(uc, UC_X86_REG_ESP, &stack_top));
     }
     for (size_t i = 0; i < test->in_count; i++) {
-        OK(uc_reg_write(uc, test->in_regs[i].reg, &test->in_regs[i].value));
+        if (test->mode == UC_MODE_64) {
+            OK(uc_reg_write(uc, test->in_regs[i].reg, &test->in_regs[i].value));
+        } else {
+            uint32_t reg = test->in_regs[i].value & 0xFFFFFFFF;
+            OK(uc_reg_write(uc, test->in_regs[i].reg, &reg));
+        }
     }
     OK(uc_emu_start(uc, MEM_TEXT, MEM_TEXT + test->code_size, 0, 0));
     for (size_t i = 0; i < test->out_count; i++) {
@@ -1470,6 +1475,7 @@ static void test_x86_16_incorrect_ip(void)
     OK(uc_close(uc));
 }
 
+// Porting to BE: Only uc_mem_read/write needs endian fixing
 static void test_x86_mmu_prepare_tlb(uc_engine *uc, uint64_t vaddr,
                                      uint64_t tlb_base)
 {
@@ -1482,9 +1488,12 @@ static void test_x86_mmu_prepare_tlb(uc_engine *uc, uint64_t vaddr,
     uint64_t pml4e = (tlb_base + 0x1000) | 1 | (1 << 2);
     uint64_t pdpe = (tlb_base + 0x2000) | 1 | (1 << 2);
     uint64_t pde = (tlb_base + 0x3000) | 1 | (1 << 2);
-    OK(uc_mem_write(uc, tlb_base + pml4o, &pml4e, sizeof(pml4o)));
-    OK(uc_mem_write(uc, tlb_base + 0x1000 + pdpo, &pdpe, sizeof(pdpe)));
-    OK(uc_mem_write(uc, tlb_base + 0x2000 + pdo, &pde, sizeof(pde)));
+    uint64_t pml4e_mem = LEINT64(pml4e);
+    uint64_t pde_mem = LEINT64(pde);
+    uint64_t pdpe_mem = LEINT64(pdpe);
+    OK(uc_mem_write(uc, tlb_base + pml4o, &pml4e_mem, sizeof(pml4o)));
+    OK(uc_mem_write(uc, tlb_base + 0x1000 + pdpo, &pdpe_mem, sizeof(pdpe)));
+    OK(uc_mem_write(uc, tlb_base + 0x2000 + pdo, &pde_mem, sizeof(pde)));
     OK(uc_reg_write(uc, UC_X86_REG_CR3, &tlb_base));
     OK(uc_reg_read(uc, UC_X86_REG_CR0, &cr0));
     OK(uc_reg_read(uc, UC_X86_REG_CR4, &cr4));
@@ -1499,10 +1508,16 @@ static void test_x86_mmu_prepare_tlb(uc_engine *uc, uint64_t vaddr,
 }
 
 static void test_x86_mmu_pt_set(uc_engine *uc, uint64_t vaddr, uint64_t paddr,
-                                uint64_t tlb_base)
+                                uint64_t tlb_base, bool readwrite)
 {
     uint64_t pto = ((vaddr & 0x000000001ff000) >> 12) * 8;
-    uint32_t pte = (paddr) | 1 | (1 << 2);
+    uint32_t pte;
+    if (readwrite)
+        pte = (paddr) | 1 | (1 << 2);
+    else
+        pte = (paddr) | 1;
+    pte = LEINT32(pte);
+
     uc_mem_write(uc, tlb_base + 0x3000 + pto, &pte, sizeof(pte));
 }
 
@@ -1576,8 +1591,8 @@ static void test_x86_mmu(void)
     OK(uc_mem_map(uc, tlb_base, 0x4000, UC_PROT_ALL)); // TLB
 
     test_x86_mmu_prepare_tlb(uc, 0x0, tlb_base);
-    test_x86_mmu_pt_set(uc, 0x2000, 0x0, tlb_base);
-    test_x86_mmu_pt_set(uc, 0x4000, 0x1000, tlb_base);
+    test_x86_mmu_pt_set(uc, 0x2000, 0x0, tlb_base, true);
+    test_x86_mmu_pt_set(uc, 0x4000, 0x1000, tlb_base, true);
 
     OK(uc_ctl_flush_tlb(uc));
     OK(uc_emu_start(uc, 0x2000, 0x0, 0, 0));
@@ -1590,7 +1605,7 @@ static void test_x86_mmu(void)
     /* restore for child */
     OK(uc_context_restore(uc, context));
     test_x86_mmu_prepare_tlb(uc, 0x0, tlb_base);
-    test_x86_mmu_pt_set(uc, 0x4000, 0x2000, tlb_base);
+    test_x86_mmu_pt_set(uc, 0x4000, 0x2000, tlb_base, true);
     rax = 0;
     OK(uc_reg_write(uc, UC_X86_REG_RAX, &rax));
     OK(uc_ctl_flush_tlb(uc));
@@ -1602,6 +1617,81 @@ static void test_x86_mmu(void)
     TEST_CHECK(LEINT64(child) == 42);
     OK(uc_context_free(context));
     OK(uc_close(uc));
+}
+
+static void test_x86_read_virtual(void)
+{
+    bool parrent_done = false;
+    uint64_t tlb_base = 0x3000;
+    uint64_t parrent, child, tmp;
+    uint64_t rax, rip;
+    uc_context *context;
+    uc_engine *uc;
+    uc_hook h1;
+
+    /*
+     * mov rax, 57
+     * syscall
+     * test rax, rax
+     * jz child
+     * xor rax, rax
+     * mov rax, 60
+     * mov [0x4000], rax
+     * syscall
+     *
+     * child:
+     * xor rcx, rcx
+     * mov rcx, 42
+     * mov [0x4000], rcx
+     * mov rax, 60
+     * syscall
+     */
+    char code[] =
+        "\xB8\x39\x00\x00\x00\x0F\x05\x48\x85\xC0\x74\x0F\xB8\x3C\x00\x00\x00"
+        "\x48\x89\x04\x25\x00\x40\x00\x00\x0F\x05\xB9\x2A\x00\x00\x00\x48\x89"
+        "\x0C\x25\x00\x40\x00\x00\xB8\x3C\x00\x00\x00\x0F\x05";
+
+    OK(uc_open(UC_ARCH_X86, UC_MODE_64, &uc));
+    OK(uc_ctl_tlb_mode(uc, UC_TLB_CPU));
+    OK(uc_hook_add(uc, &h1, UC_HOOK_INSN, &test_x86_mmu_callback, &parrent_done,
+                   1, 0, UC_X86_INS_SYSCALL));
+    OK(uc_context_alloc(uc, &context));
+
+    OK(uc_mem_map(uc, 0x0, 0x1000, UC_PROT_ALL)); // Code
+    OK(uc_mem_write(uc, 0x0, code, sizeof(code) - 1));
+    OK(uc_mem_map(uc, 0x1000, 0x1000, UC_PROT_ALL));   // Parrent
+    OK(uc_mem_map(uc, 0x2000, 0x1000, UC_PROT_ALL));   // Child
+    OK(uc_mem_map(uc, tlb_base, 0x4000, UC_PROT_ALL)); // TLB
+
+    test_x86_mmu_prepare_tlb(uc, 0x0, tlb_base);
+    test_x86_mmu_pt_set(uc, 0x2000, 0x0, tlb_base, false);
+    test_x86_mmu_pt_set(uc, 0x4000, 0x1000, tlb_base, true);
+
+    OK(uc_ctl_flush_tlb(uc));
+    OK(uc_emu_start(uc, 0x2000, 0x0, 0, 0));
+
+    OK(uc_context_save(uc, context));
+    OK(uc_reg_read(uc, UC_X86_REG_RIP, &rip));
+
+    OK(uc_emu_start(uc, rip, 0x0, 0, 0));
+    OK(uc_vmem_read(uc, 0x4000, UC_PROT_READ, &parrent,
+                           sizeof(parrent)));
+
+    /* restore for child */
+    OK(uc_context_restore(uc, context));
+    test_x86_mmu_prepare_tlb(uc, 0x0, tlb_base);
+    test_x86_mmu_pt_set(uc, 0x4000, 0x2000, tlb_base, true);
+    rax = 0;
+    OK(uc_reg_write(uc, UC_X86_REG_RAX, &rax));
+    OK(uc_ctl_flush_tlb(uc));
+
+    OK(uc_emu_start(uc, rip, 0x0, 0, 0));
+    OK(uc_vmem_read(uc, 0x4000, UC_PROT_READ, &child, sizeof(child)));
+    uc_assert_err(
+        UC_ERR_READ_PROT,
+        uc_vmem_read(uc, 0x1000, UC_PROT_WRITE, &tmp, sizeof(tmp)));
+    TEST_CHECK(parrent == 60);
+    TEST_CHECK(child == 42);
 }
 
 static bool test_x86_vtlb_callback(uc_engine *uc, uint64_t addr,
@@ -1639,7 +1729,7 @@ static void test_x86_vtlb(void)
 static void test_x86_segmentation(void)
 {
     uc_engine *uc;
-    uint64_t fs = 0x53;
+    uint16_t fs = 0x53;
     uc_x86_mmr gdtr = {0, 0xfffff8076d962000, 0x57, 0};
 
     OK(uc_open(UC_ARCH_X86, UC_MODE_64, &uc));
@@ -1699,7 +1789,8 @@ static void test_x86_64_not_overwriting_tmp0_for_pc_update(void)
     uc_hook hk;
     const char code[] = "\x48\xb9\xff\xff\xff\xff\xff\xff\xff\xff\x48\x89\x0c"
                         "\x24\x48\xd3\x24\x24\x73\x0a";
-    uint64_t rsp, pc, eflags;
+    uint64_t rsp, pc;
+    uint32_t eflags;
 
     // 0x1000: movabs  rcx, 0xffffffffffffffff
     // 0x100a: mov     qword ptr [rsp], rcx
@@ -2158,6 +2249,7 @@ TEST_LIST = {
     {"test_x86_lazy_mapping", test_x86_lazy_mapping},
     {"test_x86_16_incorrect_ip", test_x86_16_incorrect_ip},
     {"test_x86_mmu", test_x86_mmu},
+    {"test_x86_read_virtual", test_x86_read_virtual},
     {"test_x86_vtlb", test_x86_vtlb},
     {"test_x86_segmentation", test_x86_segmentation},
     {"test_x86_0xff_lcall", test_x86_0xff_lcall},

@@ -339,6 +339,7 @@ ld="${LD-${cross_prefix}ld}"
 ranlib="${RANLIB-${cross_prefix}ranlib}"
 nm="${NM-${cross_prefix}nm}"
 strip="${STRIP-${cross_prefix}strip}"
+strings="${STRINGS-${cross_prefix}strings}"
 pkg_config_exe="${PKG_CONFIG-${cross_prefix}pkg-config}"
 query_pkg_config() {
     "${pkg_config_exe}" ${QEMU_PKG_CONFIG_FLAGS} "$@"
@@ -491,6 +492,8 @@ elif check_define __aarch64__ ; then
   cpu="aarch64"
 elif check_define __tricore__ ; then
   cpu="tricore"
+elif check_define __loongarch64 ; then
+  cpu="loongarch64"
 else
   cpu=$(uname -m)
 fi
@@ -532,6 +535,10 @@ case "$cpu" in
   ;;
   tricore)
     cpu="tricore"
+    supported_cpu="yes"
+  ;;
+  loongarch64)
+    cpu="loongarch64"
     supported_cpu="yes"
   ;;
   *)
@@ -844,6 +851,11 @@ case "$cpu" in
            CPU_CFLAGS="-m64 -mcx16"
            QEMU_LDFLAGS="-m64 $QEMU_LDFLAGS"
            ;;
+    loongarch*)
+	   CPU_CFLAGS=""
+           QEMU_LDFLAGS=" $QEMU_LDFLAGS"
+           ;;
+
     x32)
            CPU_CFLAGS="-mx32"
            QEMU_LDFLAGS="-mx32 $QEMU_LDFLAGS"
@@ -1222,9 +1234,9 @@ int main(int argc, char *argv[]) {
 EOF
 
 if compile_object ; then
-    if strings -a $TMPO | grep -q BiGeNdIaN ; then
+    if ${strings} -a $TMPO | grep -q BiGeNdIaN ; then
         bigendian="yes"
-    elif strings -a $TMPO | grep -q LiTtLeEnDiAn ; then
+    elif ${strings} -a $TMPO | grep -q LiTtLeEnDiAn ; then
         bigendian="no"
     else
         echo big/little test failed
@@ -2658,6 +2670,11 @@ case "$target_name" in
   i386)
     mttcg="yes"
     TARGET_SYSTBL_ABI=i386
+  ;;
+  loongarch64)
+    mttcg="yes"
+    TARGET_ARCH=loongarch64
+    TARGET_SYSTBL_ABI=common,64
   ;;
   x86_64)
     TARGET_BASE_ARCH=i386

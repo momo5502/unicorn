@@ -88,7 +88,7 @@ impl Drop for Context {
 }
 
 pub struct MmioCallbackScope<'a> {
-    pub regions: Vec<(u64, usize)>,
+    pub regions: Vec<(u64, u64)>,
     pub read_callback: Option<Box<dyn hook::IsUcHook<'a> + 'a>>,
     pub write_callback: Option<Box<dyn hook::IsUcHook<'a> + 'a>>,
 }
@@ -98,8 +98,8 @@ impl MmioCallbackScope<'_> {
         !self.regions.is_empty()
     }
 
-    fn unmap(&mut self, begin: u64, size: usize) {
-        let end = begin + size as u64;
+    fn unmap(&mut self, begin: u64, size: u64) {
+        let end: u64 = begin + size as u64;
         self.regions = self
             .regions
             .iter()
@@ -111,14 +111,11 @@ impl MmioCallbackScope<'_> {
                         vec![(*b, *s)]
                     } else if end >= e {
                         // The unmapped region overlaps with the end of this region
-                        vec![(*b, (begin - *b) as usize)]
+                        vec![(*b, (begin - *b) as u64)]
                     } else {
                         // The unmapped region is in the middle of this region
                         let second_b = end + 1;
-                        vec![
-                            (*b, (begin - *b) as usize),
-                            (second_b, (e - second_b) as usize),
-                        ]
+                        vec![(*b, (begin - *b) as u64), (second_b, (e - second_b) as u64)]
                     }
                 } else if end > *b {
                     if end >= e {
@@ -126,7 +123,7 @@ impl MmioCallbackScope<'_> {
                         vec![]
                     } else {
                         // The unmapped region overlaps with the start of this region
-                        vec![(end, (e - end) as usize)]
+                        vec![(end, (e - end) as u64)]
                     }
                 } else {
                     // The unmapped region is completely before this region
@@ -161,6 +158,8 @@ impl<D> Drop for UnicornInner<'_, D> {
 }
 
 /// A Unicorn emulator instance.
+///
+/// You could clone this instance cheaply, since it has an `Rc` inside.
 pub struct Unicorn<'a, D: 'a> {
     inner: Rc<UnsafeCell<UnicornInner<'a, D>>>,
 }
@@ -179,24 +178,7 @@ impl<'a> Unicorn<'a, ()> {
     /// does not point to a unicorn instance will cause undefined
     /// behavior.
     pub unsafe fn from_handle(handle: *mut uc_engine) -> Result<Unicorn<'a, ()>, uc_error> {
-        if handle.is_null() {
-            return Err(uc_error::HANDLE);
-        }
-        let mut arch = 0;
-        let err = unsafe { uc_query(handle, Query::ARCH, &mut arch) };
-        if err != uc_error::OK {
-            return Err(err);
-        }
-        Ok(Unicorn {
-            inner: Rc::new(UnsafeCell::from(UnicornInner {
-                handle,
-                ffi: true,
-                arch: arch.try_into()?,
-                data: (),
-                hooks: vec![],
-                mmio_callbacks: vec![],
-            })),
-        })
+        unsafe { Self::from_handle_with_data(handle, ()) }
     }
 }
 
@@ -221,11 +203,49 @@ where
             })
         })
     }
+
+    /// # Safety
+    /// The function has to be called with a valid [`uc_engine`] pointer
+    /// that was previously allocated by a call to [`uc_open`].
+    /// Calling the function with a non null pointer value that
+    /// does not point to a unicorn instance will cause undefined
+    /// behavior.
+    pub unsafe fn from_handle_with_data(
+        handle: *mut uc_engine,
+        data: D,
+    ) -> Result<Unicorn<'a, D>, uc_error> {
+        if handle.is_null() {
+            return Err(uc_error::HANDLE);
+        }
+        let mut arch = 0;
+        let err = unsafe { uc_query(handle, Query::ARCH, &mut arch) };
+        if err != uc_error::OK {
+            return Err(err);
+        }
+        Ok(Unicorn {
+            inner: Rc::new(UnsafeCell::from(UnicornInner {
+                handle,
+                ffi: true,
+                arch: arch.try_into()?,
+                data,
+                hooks: vec![],
+                mmio_callbacks: vec![],
+            })),
+        })
+    }
 }
 
 impl<D> core::fmt::Debug for Unicorn<'_, D> {
     fn fmt(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(formatter, "Unicorn {{ uc: {:p} }}", self.get_handle())
+    }
+}
+
+impl<D> Clone for Unicorn<'_, D> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: Rc::clone(&self.inner),
+        }
     }
 }
 
@@ -288,7 +308,7 @@ impl<'a, D> Unicorn<'a, D> {
                 self.get_handle(),
                 address,
                 buf.as_mut_ptr().cast(),
-                buf.len(),
+                buf.len().try_into().unwrap(),
             )
         }
         .into()
@@ -297,8 +317,49 @@ impl<'a, D> Unicorn<'a, D> {
     /// Return a range of bytes from memory at the specified emulated physical address as vector.
     pub fn mem_read_as_vec(&self, address: u64, size: usize) -> Result<Vec<u8>, uc_error> {
         let mut buf = vec![0; size];
-        unsafe { uc_mem_read(self.get_handle(), address, buf.as_mut_ptr().cast(), size) }
-            .and(Ok(buf))
+        unsafe {
+            uc_mem_read(
+                self.get_handle(),
+                address,
+                buf.as_mut_ptr().cast(),
+                size.try_into().unwrap(),
+            )
+        }
+        .and(Ok(buf))
+    }
+
+    /// Read a range of bytes from memory at the specified emulated virtual address.
+    pub fn vmem_read(&self, address: u64, prot: Prot, buf: &mut [u8]) -> Result<(), uc_error> {
+        unsafe {
+            uc_vmem_read(
+                self.get_handle(),
+                address,
+                prot,
+                buf.as_mut_ptr() as _,
+                buf.len(),
+            )
+        }
+        .into()
+    }
+
+    /// Return a range of bytes from memory at the specified emulated virtual address as vector.
+    pub fn vmem_read_as_vec(
+        &self,
+        address: u64,
+        prot: Prot,
+        size: usize,
+    ) -> Result<Vec<u8>, uc_error> {
+        let mut buf = vec![0; size];
+        unsafe {
+            uc_vmem_read(
+                self.get_handle(),
+                address,
+                prot,
+                buf.as_mut_ptr() as _,
+                buf.len(),
+            )
+        }
+        .and(Ok(buf))
     }
 
     /// Write the data in `bytes` to the emulated physical address `address`
@@ -308,10 +369,20 @@ impl<'a, D> Unicorn<'a, D> {
                 self.get_handle(),
                 address,
                 bytes.as_ptr().cast(),
-                bytes.len(),
+                bytes.len().try_into().unwrap(),
             )
         }
         .into()
+    }
+
+    /// translate virtual to physical address
+    pub fn vmem_translate(&mut self, address: u64, prot: Prot) -> Result<u64, uc_error> {
+        let mut physical: u64 = 0;
+        let err = unsafe { uc_vmem_translate(self.get_handle(), address, prot, &mut physical) };
+        if err != uc_error::OK {
+            return Err(err);
+        }
+        return Ok(physical);
     }
 
     /// Map an existing memory region in the emulator at the specified address.
@@ -330,7 +401,7 @@ impl<'a, D> Unicorn<'a, D> {
     pub unsafe fn mem_map_ptr(
         &mut self,
         address: u64,
-        size: usize,
+        size: u64,
         perms: Prot,
         ptr: *mut c_void,
     ) -> Result<(), uc_error> {
@@ -341,7 +412,7 @@ impl<'a, D> Unicorn<'a, D> {
     ///
     /// `address` must be aligned to 4kb or this will return `Error::ARG`.
     /// `size` must be a multiple of 4kb or this will return `Error::ARG`.
-    pub fn mem_map(&mut self, address: u64, size: usize, perms: Prot) -> Result<(), uc_error> {
+    pub fn mem_map(&mut self, address: u64, size: u64, perms: Prot) -> Result<(), uc_error> {
         unsafe { uc_mem_map(self.get_handle(), address, size, perms.0 as _) }.into()
     }
 
@@ -352,7 +423,7 @@ impl<'a, D> Unicorn<'a, D> {
     pub fn mmio_map<R, W>(
         &mut self,
         address: u64,
-        size: usize,
+        size: u64,
         read_callback: Option<R>,
         write_callback: Option<W>,
     ) -> Result<(), uc_error>
@@ -400,10 +471,11 @@ impl<'a, D> Unicorn<'a, D> {
             )
         }
         .and_then(|| {
+            let u64_size: u64 = size.try_into().unwrap();
             let rd = read_data.map(|c| c as Box<dyn hook::IsUcHook>);
             let wd = write_data.map(|c| c as Box<dyn hook::IsUcHook>);
             self.inner_mut().mmio_callbacks.push(MmioCallbackScope {
-                regions: vec![(address, size)],
+                regions: vec![(address, u64_size)],
                 read_callback: rd,
                 write_callback: wd,
             });
@@ -416,7 +488,7 @@ impl<'a, D> Unicorn<'a, D> {
     ///
     /// `address` must be aligned to 4kb or this will return `Error::ARG`.
     /// `size` must be a multiple of 4kb or this will return `Error::ARG`.
-    pub fn mmio_map_ro<F>(&mut self, address: u64, size: usize, callback: F) -> Result<(), uc_error>
+    pub fn mmio_map_ro<F>(&mut self, address: u64, size: u64, callback: F) -> Result<(), uc_error>
     where
         F: FnMut(&mut Unicorn<D>, u64, usize) -> u64 + 'a,
     {
@@ -432,7 +504,7 @@ impl<'a, D> Unicorn<'a, D> {
     ///
     /// `address` must be aligned to 4kb or this will return `Error::ARG`.
     /// `size` must be a multiple of 4kb or this will return `Error::ARG`.
-    pub fn mmio_map_wo<F>(&mut self, address: u64, size: usize, callback: F) -> Result<(), uc_error>
+    pub fn mmio_map_wo<F>(&mut self, address: u64, size: u64, callback: F) -> Result<(), uc_error>
     where
         F: FnMut(&mut Unicorn<D>, u64, usize, u64) + 'a,
     {
@@ -448,13 +520,13 @@ impl<'a, D> Unicorn<'a, D> {
     ///
     /// `address` must be aligned to 4kb or this will return `Error::ARG`.
     /// `size` must be a multiple of 4kb or this will return `Error::ARG`.
-    pub fn mem_unmap(&mut self, address: u64, size: usize) -> Result<(), uc_error> {
+    pub fn mem_unmap(&mut self, address: u64, size: u64) -> Result<(), uc_error> {
         let err = unsafe { uc_mem_unmap(self.get_handle(), address, size) };
         self.mmio_unmap(address, size);
         err.into()
     }
 
-    fn mmio_unmap(&mut self, address: u64, size: usize) {
+    fn mmio_unmap(&mut self, address: u64, size: u64) {
         for scope in &mut self.inner_mut().mmio_callbacks {
             scope.unmap(address, size);
         }
@@ -467,7 +539,7 @@ impl<'a, D> Unicorn<'a, D> {
     ///
     /// `address` must be aligned to 4kb or this will return `Error::ARG`.
     /// `size` must be a multiple of 4kb or this will return `Error::ARG`.
-    pub fn mem_protect(&mut self, address: u64, size: usize, perms: Prot) -> Result<(), uc_error> {
+    pub fn mem_protect(&mut self, address: u64, size: u64, perms: Prot) -> Result<(), uc_error> {
         unsafe { uc_mem_protect(self.get_handle(), address, size, perms.0 as _) }.into()
     }
 
@@ -1057,6 +1129,42 @@ impl<'a, D> Unicorn<'a, D> {
         }
     }
 
+    /// Add hook for edge generated event.
+    ///
+    /// Callback parameters: (uc, cur_tb, prev_tb)
+    pub fn add_edge_gen_hook<F>(
+        &mut self,
+        begin: u64,
+        end: u64,
+        callback: F,
+    ) -> Result<UcHookId, uc_error>
+    where
+        F: FnMut(&mut Unicorn<D>, &mut TranslationBlock, &mut TranslationBlock) + 'a,
+    {
+        let mut hook_id = 0;
+        let mut user_data = Box::new(hook::UcHook {
+            callback,
+            uc: Rc::downgrade(&self.inner),
+        });
+
+        unsafe {
+            uc_hook_add(
+                self.get_handle(),
+                (&raw mut hook_id).cast(),
+                HookType::EDGE_GENERATED.0 as i32,
+                hook::edge_gen_hook_proxy::<D, F> as _,
+                core::ptr::from_mut(user_data.as_mut()).cast(),
+                begin,
+                end,
+            )
+        }
+        .and_then(|| {
+            let hook_id = UcHookId(hook_id);
+            self.inner_mut().hooks.push((hook_id, user_data));
+            Ok(hook_id)
+        })
+    }
+
     /// Remove a hook.
     ///
     /// `hook_id` is the value returned by `add_*_hook` functions.
@@ -1147,10 +1255,15 @@ impl<'a, D> Unicorn<'a, D> {
     /// Get the `i32` register value for the program counter for the specified architecture.
     ///
     /// If an architecture is not compiled in, this function will return `uc_error::ARCH`.
-    const fn arch_to_pc_register(arch: Arch) -> Result<i32, uc_error> {
+    const fn arch_to_pc_register(arch: Arch, mode: Mode) -> Result<i32, uc_error> {
         match arch {
             #[cfg(feature = "arch_x86")]
-            Arch::X86 => Ok(RegisterX86::RIP as i32),
+            Arch::X86 => match mode {
+                Mode::MODE_16 => Ok(RegisterX86::IP as _),
+                Mode::MODE_32 => Ok(RegisterX86::EIP as _),
+                Mode::MODE_64 => Ok(RegisterX86::RIP as _),
+                _ => Err(uc_error::ARCH),
+            },
             #[cfg(feature = "arch_arm")]
             Arch::ARM => Ok(RegisterARM::PC as i32),
             #[cfg(feature = "arch_arm")]
@@ -1178,15 +1291,17 @@ impl<'a, D> Unicorn<'a, D> {
     /// Gets the current program counter for this `unicorn` instance.
     pub fn pc_read(&self) -> Result<u64, uc_error> {
         let arch = self.get_arch();
+        let mode = self.ctl_get_mode()?;
 
-        self.reg_read(Self::arch_to_pc_register(arch)?)
+        self.reg_read(Self::arch_to_pc_register(arch, mode)?)
     }
 
     /// Sets the program counter for this `unicorn` instance.
     pub fn set_pc(&mut self, value: u64) -> Result<(), uc_error> {
         let arch = self.get_arch();
+        let mode = self.ctl_get_mode()?;
 
-        self.reg_write(Self::arch_to_pc_register(arch)?, value)
+        self.reg_write(Self::arch_to_pc_register(arch, mode)?, value)
     }
 
     pub fn ctl_get_mode(&self) -> Result<Mode, uc_error> {
