@@ -1866,7 +1866,6 @@ helper_lcall_protected \
 helper_iret_real \
 helper_iret_protected \
 helper_lret_protected \
-helper_sgdt \
 helper_sysenter \
 helper_sysexit \
 helper_lsl \

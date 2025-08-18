@@ -77,16 +77,6 @@ typedef struct uc_x86_msr {
 // @user_data: user data passed to tracing APIs.
 typedef void (*uc_cb_insn_syscall_t)(struct uc_struct *uc, void *user_data);
 
-// Callback function for tracing sgdt (for uc_hook_intr())
-// @user_data: user data passed to tracing APIs.
-// @destination: destination address for the GDT.
-//
-// @return: true indicates the callback overwrites the sgdt instruction while
-// false
-//          indicates sgdt instruction will still be executed.
-typedef int (*uc_cb_insn_sgdt_t)(struct uc_struct *uc, uint64_t destination,
-                                 void *user_data);
-
 // Callback function for tracing cpuid (for uc_hook_intr())
 // @user_data: user data passed to tracing APIs.
 //

@@ -90,7 +90,6 @@ DEF_HELPER_1(rdpmc, void, env)
 DEF_HELPER_1(rdmsr, void, env)
 DEF_HELPER_1(wrmsr, void, env)
 
-DEF_HELPER_2(sgdt, i32, env, i64)
 DEF_HELPER_2(check_iob, void, env, i32)
 DEF_HELPER_2(check_iow, void, env, i32)
 DEF_HELPER_2(check_iol, void, env, i32)
