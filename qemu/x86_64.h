@@ -1859,6 +1859,7 @@
 #define helper_iret_real helper_iret_real_x86_64
 #define helper_iret_protected helper_iret_protected_x86_64
 #define helper_lret_protected helper_lret_protected_x86_64
+#define helper_sgdt helper_sgdt_x86_64
 #define helper_sysenter helper_sysenter_x86_64
 #define helper_sysexit helper_sysexit_x86_64
 #define helper_lsl helper_lsl_x86_64

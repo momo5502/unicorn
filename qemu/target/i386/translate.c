@@ -8059,17 +8059,27 @@ static target_ulong disas_insn(DisasContext *s, CPUState *cpu)
         modrm = x86_ldub_code(env, s);
         switch (modrm) {
         CASE_MODRM_MEM_OP(0): /* sgdt */
-            gen_svm_check_intercept(s, pc_start, SVM_EXIT_GDTR_READ);
-            gen_lea_modrm(env, s, modrm);
-            tcg_gen_ld32u_tl(tcg_ctx, s->T0,
-                             tcg_ctx->cpu_env, offsetof(CPUX86State, gdt.limit));
-            gen_op_st_v(s, MO_16, s->T0, s->A0);
-            gen_add_A0_im(s, 2);
-            tcg_gen_ld_tl(tcg_ctx, s->T0, tcg_ctx->cpu_env, offsetof(CPUX86State, gdt.base));
-            if (dflag == MO_16) {
-                tcg_gen_andi_tl(tcg_ctx, s->T0, s->T0, 0xffffff);
+            {
+                TCGv_i32 t0;
+                TCGLabel *label1;
+                t0 = tcg_const_i32(tcg_ctx, 0);
+                label1 = gen_new_label(tcg_ctx);
+                gen_lea_modrm(env, s, modrm);
+                gen_helper_sgdt(tcg_ctx, s->tmp2_i32, tcg_ctx->cpu_env, s->A0);
+                tcg_gen_brcond_i32(tcg_ctx, TCG_COND_NE, s->tmp2_i32, t0, label1);
+                gen_svm_check_intercept(s, pc_start, SVM_EXIT_GDTR_READ);
+                tcg_gen_ld32u_tl(tcg_ctx, s->T0,
+                                 tcg_ctx->cpu_env, offsetof(CPUX86State, gdt.limit));
+                gen_op_st_v(s, MO_16, s->T0, s->A0);
+                gen_add_A0_im(s, 2);
+                tcg_gen_ld_tl(tcg_ctx, s->T0, tcg_ctx->cpu_env, offsetof(CPUX86State, gdt.base));
+                if (dflag == MO_16) {
+                    tcg_gen_andi_tl(tcg_ctx, s->T0, s->T0, 0xffffff);
+                }
+                gen_op_st_v(s, CODE64(s) + MO_32, s->T0, s->A0);
+                gen_set_label(tcg_ctx, label1);
+                tcg_temp_free_i32(tcg_ctx, t0);
             }
-            gen_op_st_v(s, CODE64(s) + MO_32, s->T0, s->A0);
             break;
 
         case 0xc8: /* monitor */
