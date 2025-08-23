@@ -211,6 +211,33 @@ void helper_invlpg(CPUX86State *env, target_ulong addr)
     tlb_flush_page(CPU(cpu), addr);
 }
 
+uint32_t helper_sgdt(CPUX86State *env, uint64_t destination)
+{
+    // Unicorn: call registered SGDT hooks
+    struct hook *hook;
+    int skip_sgdt = 0;
+    uc_engine *uc = env->uc;
+
+    HOOK_FOREACH_VAR_DECLARE;
+    HOOK_FOREACH(env->uc, hook, UC_HOOK_INSN) {
+        if (hook->to_delete)
+            continue;
+        if (!HOOK_BOUND_CHECK(hook, env->eip))
+            continue;
+        if (hook->insn == UC_X86_INS_SGDT) {
+            JIT_CALLBACK_GUARD_VAR(skip_sgdt,
+                                   ((uc_cb_insn_sgdt_t)hook->callback)(
+                                       env->uc, destination, hook->user_data));
+        }
+
+        // the last callback may already asked to stop emulation
+        if (env->uc->stop_request)
+            break;
+    }
+
+    return (uint32_t)skip_sgdt;
+}
+
 void helper_rdtsc(CPUX86State *env)
 {
     uint64_t val;
