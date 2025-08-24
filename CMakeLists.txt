@@ -520,6 +520,7 @@ set(UNICORN_ARCH_COMMON
 )
 
 if(UNICORN_TARGET_ARCH STREQUAL "tci")
+  add_compile_definitions(CONFIG_TCG_INTERPRETER=1)
   set(UNICORN_ARCH_COMMON ${UNICORN_ARCH_COMMON} qemu/tcg/tci.c)
 endif()
 

@@ -392,7 +392,10 @@ void tb_exec_lock(struct uc_struct*);
 void tb_exec_unlock(struct uc_struct*);
 
 /* GETPC is the true target of the return instruction that we'll execute.  */
-#ifdef _MSC_VER
+#if defined(CONFIG_TCG_INTERPRETER)
+extern uintptr_t tci_tb_ptr;
+# define GETPC() tci_tb_ptr
+#elif defined(_MSC_VER)
 #include <intrin.h>
 # define GETPC() (uintptr_t)_ReturnAddress()
 #else

@@ -32,6 +32,8 @@
 #include "exec/cpu_ldst.h"
 #include "tcg/tcg-op.h"
 
+__thread uintptr_t tci_tb_ptr;
+
 /* Marker for missing code. */
 #define TODO() \
     do { \
