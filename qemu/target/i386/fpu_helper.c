@@ -93,6 +93,7 @@ static inline floatx80 helper_fldt(CPUX86State *env, target_ulong ptr,
                                    uintptr_t retaddr)
 {
     CPU_LDoubleU temp;
+    memset(&temp, 0, sizeof(temp));
 
     temp.l.lower = cpu_ldq_data_ra(env, ptr, retaddr);
     temp.l.upper = cpu_lduw_data_ra(env, ptr + 8, retaddr);
@@ -103,6 +104,7 @@ static inline void helper_fstt(CPUX86State *env, floatx80 f, target_ulong ptr,
                                uintptr_t retaddr)
 {
     CPU_LDoubleU temp;
+    memset(&temp, 0, sizeof(temp));
 
     temp.d = f;
     cpu_stq_data_ra(env, ptr, temp.l.lower, retaddr);
@@ -766,6 +768,7 @@ void helper_fpatan(CPUX86State *env)
 void helper_fxtract(CPUX86State *env)
 {
     CPU_LDoubleU temp;
+    memset(&temp, 0, sizeof(temp));
 
     temp.d = ST0;
 
@@ -795,6 +798,9 @@ void helper_fprem1(CPUX86State *env)
     CPU_LDoubleU fpsrcop1, fptemp1;
     int expdif;
     signed long long int q;
+
+    memset(&fpsrcop1, 0, sizeof(fpsrcop1));
+    memset(&fptemp1, 0, sizeof(fptemp1));
 
     st0 = floatx80_to_double(env, ST0);
     st1 = floatx80_to_double(env, ST1);
@@ -854,6 +860,9 @@ void helper_fprem(CPUX86State *env)
     CPU_LDoubleU fpsrcop1, fptemp1;
     int expdif;
     signed long long int q;
+
+    memset(&fpsrcop1, 0, sizeof(fpsrcop1));
+    memset(&fptemp1, 0, sizeof(fptemp1));
 
     st0 = floatx80_to_double(env, ST0);
     st1 = floatx80_to_double(env, ST1);
@@ -993,6 +1002,7 @@ void helper_fxam_ST0(CPUX86State *env)
 {
     CPU_LDoubleU temp;
     int expdif;
+    memset(&temp, 0, sizeof(temp));
 
     temp.d = ST0;
 
@@ -1030,6 +1040,7 @@ static void do_fstenv(CPUX86State *env, target_ulong ptr, int data32,
     int fpus, fptag, exp, i;
     uint64_t mant;
     CPU_LDoubleU tmp;
+    memset(&tmp, 0, sizeof(tmp));
 
     fpus = (env->fpus & ~0x3800) | (env->fpstt & 0x7) << 11;
     fptag = 0;

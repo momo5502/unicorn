@@ -279,6 +279,7 @@ uc_err reg_read(void *_env, int mode, unsigned int regid, void *value,
         int fptag, exp, i;
         uint64_t mant;
         CPU_LDoubleU tmp;
+        memset(&tmp, 0, sizeof(tmp));
         fptag = 0;
         for (i = 7; i >= 0; i--) {
             fptag <<= 2;
