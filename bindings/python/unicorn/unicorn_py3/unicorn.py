@@ -1253,16 +1253,15 @@ class Uc(RegStateManager):
 
         self.ctl(ctl, uc.UC_CTL_IO_WRITE, *cargs)
 
-    def __ctl_wr(self, ctl: int, arg0: Arg, arg1: Arg):
-        atype, avalue = arg0
-        carg0 = atype(avalue)
+    def __ctl_wr(self, ctl: int, *args: Arg):
+        cargs = (atype(avalue) for atype, avalue in args[:-1])
 
-        atype, _ = arg1
-        carg1 = atype()
+        atype, _ = args[-1]
+        cretv = atype()
 
-        self.ctl(ctl, uc.UC_CTL_IO_READ_WRITE, carg0, ctypes.byref(carg1))
+        self.ctl(ctl, uc.UC_CTL_IO_READ_WRITE, *cargs, ctypes.byref(cretv))
 
-        return carg1.value
+        return cretv.value
 
     def ctl_get_mode(self) -> int:
         """Retrieve current processor mode.
@@ -1473,6 +1472,58 @@ class Uc(RegStateManager):
 
         self.__ctl_w(uc.UC_CTL_TCG_BUFFER_SIZE,
             (ctypes.c_uint32, size)
+        )
+
+    def ctl_pauth_sign(self, ptr: int, key: int, diversifier: int) -> int:
+        """Sign a pointer with a key and discriminator.
+
+        Args:
+            ptr: pointer to sign
+            key: architecture-specific constant indicating the key to use
+            diversifier: discriminator to use
+
+        Returns: the signed pointer
+        """
+
+        return self.__ctl_wr(uc.UC_CTL_PAUTH_SIGN,
+            (ctypes.c_uint64, ptr),
+            (ctypes.c_uint32, key),
+            (ctypes.c_uint64, diversifier),
+            (ctypes.c_uint64, None),
+        )
+
+    def ctl_pauth_strip(self, ptr: int, key: int) -> int:
+        """Strip the PAC from a possibly signed pointer.
+
+        Args:
+            ptr: pointer to strip PAC from
+            key: architecture-specific constant indicating the key to use
+
+        Returns: the stripped pointer
+        """
+
+        return self.__ctl_wr(uc.UC_CTL_PAUTH_STRIP,
+            (ctypes.c_uint64, ptr),
+            (ctypes.c_uint32, key),
+            (ctypes.c_uint64, None),
+        )
+
+    def ctl_pauth_auth(self, ptr: int, key: int, diversifier: int) -> bool:
+        """Authenticate a pointer with a key and discriminator.
+
+        Args:
+            ptr: signed pointer to authenticate
+            key: architecture-specific constant indicating the key to use
+            diversifier: discriminator to use
+
+        Returns: True if signature is valid, False othewise
+        """
+
+        return self.__ctl_wr(uc.UC_CTL_PAUTH_AUTH,
+            (ctypes.c_uint64, ptr),
+            (ctypes.c_uint32, key),
+            (ctypes.c_uint64, diversifier),
+            (ctypes.c_bool, None),
         )
 
 

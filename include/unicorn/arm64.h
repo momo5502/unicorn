@@ -383,8 +383,19 @@ typedef enum uc_arm64_insn {
     UC_ARM64_INS_SYS,
     UC_ARM64_INS_SYSL,
 
+    UC_ARM64_INS_WFI,
     UC_ARM64_INS_ENDING
 } uc_arm64_insn;
+
+//> ARM64 PAuth keys
+typedef enum uc_arm64_pauth_key {
+    UC_ARM64_PAUTH_KEY_IA = 0,
+    UC_ARM64_PAUTH_KEY_IB,
+    UC_ARM64_PAUTH_KEY_DA,
+    UC_ARM64_PAUTH_KEY_DB,
+    UC_ARM64_PAUTH_KEY_GA,
+    UC_ARM64_PAUTH_KEY_ENDING,
+} uc_arm64_pauth_key;
 
 #ifdef __cplusplus
 }

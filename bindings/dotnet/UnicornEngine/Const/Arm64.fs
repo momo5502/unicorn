@@ -337,5 +337,15 @@ module Arm64 =
     let UC_ARM64_INS_MSR = 2
     let UC_ARM64_INS_SYS = 3
     let UC_ARM64_INS_SYSL = 4
-    let UC_ARM64_INS_ENDING = 5
+    let UC_ARM64_INS_WFI = 5
+    let UC_ARM64_INS_ENDING = 6
+
+    // ARM64 PAuth keys
+
+    let UC_ARM64_PAUTH_KEY_IA = 0
+    let UC_ARM64_PAUTH_KEY_IB = 1
+    let UC_ARM64_PAUTH_KEY_DA = 2
+    let UC_ARM64_PAUTH_KEY_DB = 3
+    let UC_ARM64_PAUTH_KEY_GA = 4
+    let UC_ARM64_PAUTH_KEY_ENDING = 5
 

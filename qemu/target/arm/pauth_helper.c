@@ -492,3 +492,33 @@ uint64_t HELPER(xpacd)(CPUARMState *env, uint64_t a)
 {
     return pauth_strip(env, a, true);
 }
+
+uint64_t _uc_pauth_sign(CPUARMState *env, uint64_t ptr, uint64_t diversifier, uint32_t sctlr_bit, ARMPACKey *key, bool data)
+{
+    int el = arm_current_el(env);
+    if (!pauth_key_enabled(env, el, sctlr_bit)) {
+        return ptr;
+    } else {
+        return pauth_addpac(env, ptr, diversifier, key, data);
+    }
+}
+
+uint64_t _uc_pauth_sign_ga(CPUARMState *env, uint64_t ptr, uint64_t diversifier)
+{
+    return pauth_computepac(ptr, diversifier, env->keys.apga) & 0xffffffff00000000ull;
+}
+
+uint64_t _uc_pauth_strip(CPUARMState *env, uint64_t ptr, bool data)
+{
+    return pauth_strip(env, ptr, data);
+}
+
+bool _uc_pauth_auth(CPUARMState *env, uint64_t ptr, uint64_t diversifier, uint32_t sctlr_bit, ARMPACKey *key, bool data)
+{
+    int el = arm_current_el(env);
+    if (!pauth_key_enabled(env, el, sctlr_bit)) {
+        return false;
+    }
+    uint64_t maybe_corrupted_ptr = pauth_auth(env, ptr, diversifier, key, data, 0);
+    return maybe_corrupted_ptr == pauth_strip(env, ptr, data);
+}

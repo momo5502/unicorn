@@ -17,6 +17,10 @@ static void uc_common_setup(uc_engine **uc, uc_arch arch, uc_mode mode,
     OK(uc_mem_write(*uc, code_start, code, size));
 }
 
+typedef struct _WFI_HOOK_INSN_RESULT {
+    bool called;
+} WFI_HOOK_INSN_RESULT;
+
 static void test_arm64_until(void)
 {
     uc_engine *uc;
@@ -118,7 +122,7 @@ static void test_arm64_code_patching_count(void)
     OK(uc_close(uc));
 }
 
-static void test_arm64_v8_pac(void)
+static void test_arm64_v8_cas(void)
 {
     uc_engine *uc;
     char code[] = "\x28\xfd\xea\xc8"; // casal x10, x8, [x9]
@@ -164,7 +168,7 @@ static void test_arm64_read_sctlr(void)
     OK(uc_close(uc));
 }
 
-static uint32_t test_arm64_mrs_hook_cb(uc_engine *uc, uc_arm64_reg reg,
+static uint32_t test_arm64_hook_insn_mrs_cb(uc_engine *uc, uc_arm64_reg reg,
                                        const uc_arm64_cp_reg *cp_reg)
 {
     uint64_t r_x2 = 0x114514;
@@ -175,7 +179,7 @@ static uint32_t test_arm64_mrs_hook_cb(uc_engine *uc, uc_arm64_reg reg,
     return 1;
 }
 
-static void test_arm64_mrs_hook(void)
+static void test_arm64_hook_insn_mrs(void)
 {
     uc_engine *uc;
     uc_hook hk;
@@ -186,7 +190,7 @@ static void test_arm64_mrs_hook(void)
     uc_common_setup(&uc, UC_ARCH_ARM64, UC_MODE_LITTLE_ENDIAN | UC_MODE_ARM,
                     code, sizeof(code) - 1, UC_CPU_ARM64_A72);
 
-    OK(uc_hook_add(uc, &hk, UC_HOOK_INSN, (void *)test_arm64_mrs_hook_cb, NULL,
+    OK(uc_hook_add(uc, &hk, UC_HOOK_INSN, (void *)test_arm64_hook_insn_mrs_cb, NULL,
                    1, 0, UC_ARM64_INS_MRS));
 
     OK(uc_emu_start(uc, code_start, code_start + sizeof(code) - 1, 0, 0));
@@ -197,6 +201,32 @@ static void test_arm64_mrs_hook(void)
 
     OK(uc_hook_del(uc, hk));
 
+    OK(uc_close(uc));
+}
+
+static int test_arm64_hook_insn_wfi_callback(uc_engine *uc, void *user_data)
+{
+    WFI_HOOK_INSN_RESULT *result = (WFI_HOOK_INSN_RESULT *)user_data;
+    result->called = true;
+    return 0;
+}
+
+static void test_arm64_hook_insn_wfi(void)
+{
+    uc_engine *uc;
+    uc_hook hook;
+    char code[] = "\x7f\x20\x03\xd5"; // wfi
+    WFI_HOOK_INSN_RESULT result = {false};
+
+    uc_common_setup(&uc, UC_ARCH_ARM64, UC_MODE_LITTLE_ENDIAN | UC_MODE_ARM,
+                    code, sizeof(code) - 1, UC_CPU_ARM64_A72);
+    OK(uc_hook_add(uc, &hook, UC_HOOK_INSN, test_arm64_hook_insn_wfi_callback, &result, 1, 0,
+                   UC_ARM64_INS_WFI));
+
+    OK(uc_emu_start(uc, code_start, code_start + sizeof(code) - 1, 0, 0));
+    TEST_CHECK(result.called == true);
+
+    OK(uc_hook_del(uc, hook));
     OK(uc_close(uc));
 }
 
@@ -665,12 +695,262 @@ static void test_arm64_pc_guarantee(void)
     OK(uc_close(uc));
 }
 
+static uint64_t test_arm64_pauth_cp_reg_read(uc_engine *uc, const uint32_t cpregid[5])
+{
+    uc_arm64_cp_reg reg = {
+        .op0 = cpregid[0],
+        .op1 = cpregid[1],
+        .crn = cpregid[2],
+        .crm = cpregid[3],
+        .op2 = cpregid[4],
+        .val = 0,
+    };
+    OK(uc_reg_read(uc, UC_ARM64_REG_CP_REG, &reg));
+    return reg.val;
+}
+
+static void test_arm64_pauth_cp_reg_write(uc_engine *uc, const uint32_t cpregid[5], uint64_t value)
+{
+    uc_arm64_cp_reg reg = {
+        .op0 = cpregid[0],
+        .op1 = cpregid[1],
+        .crn = cpregid[2],
+        .crm = cpregid[3],
+        .op2 = cpregid[4],
+        .val = value,
+    };
+    OK(uc_reg_write(uc, UC_ARM64_REG_CP_REG, &reg));
+}
+
+static bool test_arm64_pauth_cp_reg_update(uc_engine *uc, const uint32_t cpregid[5], uint64_t clearmask, uint64_t setmask)
+{
+    uc_arm64_cp_reg reg = {
+        .op0 = cpregid[0],
+        .op1 = cpregid[1],
+        .crn = cpregid[2],
+        .crm = cpregid[3],
+        .op2 = cpregid[4],
+        .val = 0,
+    };
+    OK(uc_reg_read(uc, UC_ARM64_REG_CP_REG, &reg));
+    reg.val &= ~clearmask;
+    reg.val |= setmask;
+    OK(uc_reg_write(uc, UC_ARM64_REG_CP_REG, &reg));
+    OK(uc_reg_read(uc, UC_ARM64_REG_CP_REG, &reg));
+    return (((reg.val & setmask) == setmask) && ((reg.val & clearmask) == 0));
+}
+
+static void test_arm64_pauth_check_cpu_feat(uc_engine *uc)
+{
+    // Check the CPU actually supports any form of PAuth, i.e. any APA or API
+    // bits are set.  At the time of writing, UC_CPU_ARM64_A72 does not support
+    // PAuth, but UC_CPU_ARM64_MAX does.  This check is not required for any of
+    // the PAuth tests to work, but helps with diagnostics when the selected
+    // CPU does not support PAuth.
+
+    const uint32_t ID_AA64ISAR1_EL1[5] = { 0b11, 0b000, 0b0000, 0b0110, 0b001 };
+    const uint64_t ID_AA64ISAR1_EL1_APA_API_MASK = (0b1111ULL << 4) | (0b1111ULL << 8);
+    uint64_t ID_AA64ISAR1_EL1_bits = test_arm64_pauth_cp_reg_read(uc, ID_AA64ISAR1_EL1);
+    TEST_CHECK((ID_AA64ISAR1_EL1_bits & ID_AA64ISAR1_EL1_APA_API_MASK) != 0);
+}
+
+#define SCTLR_EL1_EnIA (1ULL << 31)
+#define SCTLR_EL1_EnIB (1ULL << 30)
+#define SCTLR_EL1_EnDA (1ULL << 27)
+#define SCTLR_EL1_EnDB (1ULL << 13)
+static void test_arm64_pauth_setup(uc_engine *uc, uint64_t SCTLR_EL1_En_bits)
+{
+    // Minimal PAuth setup.  The tests are agnostic to VA size and MTE config,
+    // so don't bother touching TCR_EL1 for now.  Proper setup for PAuth would
+    // also involve configuring TCR_EL1 TxSZ, TBIx, TBDIx too.
+
+    const uint32_t SCR_EL3[5] = { 0b11, 0b110, 0b0001, 0b0001, 0b000 };
+    const uint64_t SCR_EL3_NS_RW_API = 1ULL | (1ULL << 10) | (1ULL << 17);
+    TEST_CHECK(test_arm64_pauth_cp_reg_update(uc, SCR_EL3, 0, SCR_EL3_NS_RW_API));
+
+    const uint32_t HCR_EL2[5] = { 0b11, 0b100, 0b0001, 0b0001, 0b000 };
+    const uint64_t HCR_EL2_API = 1ULL << 41;
+    TEST_CHECK(test_arm64_pauth_cp_reg_update(uc, HCR_EL2, 0, HCR_EL2_API));
+
+    const uint32_t SCTLR_EL1[5] = { 0b11, 0b000, 0b0001, 0b0000, 0b000 };
+    TEST_CHECK(test_arm64_pauth_cp_reg_update(uc, SCTLR_EL1, 0, SCTLR_EL1_En_bits));
+
+    // Set up all keys.  Tests expect them being set even when not enabled.
+    const uint32_t APIAKeyLo_EL1[5] = { 0b11, 0b000, 0b0010, 0b0001, 0b000 };
+    const uint32_t APIAKeyHi_EL1[5] = { 0b11, 0b000, 0b0010, 0b0001, 0b001 };
+    const uint32_t APIBKeyLo_EL1[5] = { 0b11, 0b000, 0b0010, 0b0001, 0b010 };
+    const uint32_t APIBKeyHi_EL1[5] = { 0b11, 0b000, 0b0010, 0b0001, 0b011 };
+    const uint32_t APDAKeyLo_EL1[5] = { 0b11, 0b000, 0b0010, 0b0010, 0b000 };
+    const uint32_t APDAKeyHi_EL1[5] = { 0b11, 0b000, 0b0010, 0b0010, 0b001 };
+    const uint32_t APDBKeyLo_EL1[5] = { 0b11, 0b000, 0b0010, 0b0010, 0b010 };
+    const uint32_t APDBKeyHi_EL1[5] = { 0b11, 0b000, 0b0010, 0b0010, 0b011 };
+    const uint32_t APGAKeyLo_EL1[5] = { 0b11, 0b000, 0b0010, 0b0011, 0b000 };
+    const uint32_t APGAKeyHi_EL1[5] = { 0b11, 0b000, 0b0010, 0b0011, 0b001 };
+    test_arm64_pauth_cp_reg_write(uc, APIAKeyLo_EL1, 0xAAAAAAAAAAAAAAAAULL);
+    test_arm64_pauth_cp_reg_write(uc, APIAKeyHi_EL1, 0xBBBBBBBBBBBBBBBBULL);
+    test_arm64_pauth_cp_reg_write(uc, APIBKeyLo_EL1, 0xCCCCCCCCCCCCCCCCULL);
+    test_arm64_pauth_cp_reg_write(uc, APIBKeyHi_EL1, 0xDDDDDDDDDDDDDDDDULL);
+    test_arm64_pauth_cp_reg_write(uc, APDAKeyLo_EL1, 0xAAAAAAAAAAAAAAAAULL); // == IA
+    test_arm64_pauth_cp_reg_write(uc, APDAKeyHi_EL1, 0xBBBBBBBBBBBBBBBBULL);
+    test_arm64_pauth_cp_reg_write(uc, APDBKeyLo_EL1, 0xEEEEEEEEEEEEEEEEULL);
+    test_arm64_pauth_cp_reg_write(uc, APDBKeyHi_EL1, 0xFFFFFFFFFFFFFFFFULL);
+    test_arm64_pauth_cp_reg_write(uc, APGAKeyLo_EL1, 0x0123456789ABCDEFULL);
+    test_arm64_pauth_cp_reg_write(uc, APGAKeyHi_EL1, 0x0123456789ABCDEFULL);
+}
+
+static void test_arm64_pauth_vanilla(void) {
+    // PAuth test w/o using any uc_ctl interfaces, just PAuth on the CPU.
+
+    uc_engine *uc;
+    const char code_paciza_x1[] = "\xe1\x23\xc1\xda"; // paciza x1
+    const char code_autiza_x1[] = "\xe1\x33\xc1\xda"; // autiza x1
+    const char code_autizb_x1[] = "\xe1\x37\xc1\xda"; // autizb x1
+    const char code_autdza_x1[] = "\xe1\x3b\xc1\xda"; // autdza x1
+    const char code_autia_x1_x0[] = "\x01\x10\xc1\xda"; // autia x1, x0
+    const char code_xpaci_x1[] = "\xe1\x43\xc1\xda"; // xpaci x1
+
+    // We expect a PAC added somewhere in pac_mask bits in order to make the
+    // test agnostic of TxSZ and TBI.
+
+    const uint64_t some_unsigned_pointer = 0x0000aaaabbbbccccULL;
+    const uint64_t pac_mask = 0xffff000000000000ULL & ~(1ULL << 55);
+
+    OK(uc_open(UC_ARCH_ARM64, UC_MODE_ARM, &uc));
+    OK(uc_ctl_set_cpu_model(uc, UC_CPU_ARM64_MAX));
+    OK(uc_mem_map(uc, code_start, code_len, UC_PROT_ALL));
+
+    test_arm64_pauth_check_cpu_feat(uc);
+    test_arm64_pauth_setup(uc, SCTLR_EL1_EnIA | SCTLR_EL1_EnIB);
+
+    // Verify that paciza signs a pointer.
+
+    OK(uc_reg_write(uc, UC_ARM64_REG_X1, &some_unsigned_pointer));
+    OK(uc_mem_write(uc, code_start, code_paciza_x1, sizeof(code_paciza_x1)));
+    OK(uc_emu_start(uc, code_start, code_start + sizeof(code_paciza_x1) - 1, 0, 0));
+    uint64_t signed_pointer = 0;
+    OK(uc_reg_read(uc, UC_ARM64_REG_X1, &signed_pointer));
+    TEST_CHECK(signed_pointer != some_unsigned_pointer);
+    TEST_CHECK((signed_pointer & pac_mask) != 0);
+
+    // Verify that xpaci results in original pointer.
+
+    OK(uc_mem_write(uc, code_start, code_xpaci_x1, sizeof(code_xpaci_x1)));
+    OK(uc_emu_start(uc, code_start, code_start + sizeof(code_xpaci_x1) - 1, 0, 0));
+    uint64_t stripped_pointer = 0;
+    OK(uc_reg_read(uc, UC_ARM64_REG_X1, &stripped_pointer));
+    TEST_CHECK(stripped_pointer == some_unsigned_pointer);
+
+    // Verify autia behaviour.
+
+    OK(uc_reg_write(uc, UC_ARM64_REG_X1, &some_unsigned_pointer));
+    OK(uc_mem_write(uc, code_start, code_autiza_x1, sizeof(code_autiza_x1)));
+    OK(uc_emu_start(uc, code_start, code_start + sizeof(code_autiza_x1) - 1, 0, 0));
+    uint64_t authenticated_pointer = 0;
+    OK(uc_reg_read(uc, UC_ARM64_REG_X1, &authenticated_pointer));
+    TEST_CHECK((authenticated_pointer & pac_mask) != 0); // unsigned pointer is invalid
+
+    OK(uc_reg_write(uc, UC_ARM64_REG_X1, &signed_pointer));
+    OK(uc_mem_write(uc, code_start, code_autiza_x1, sizeof(code_autiza_x1)));
+    OK(uc_emu_start(uc, code_start, code_start + sizeof(code_autiza_x1) - 1, 0, 0));
+    authenticated_pointer = 0;
+    OK(uc_reg_read(uc, UC_ARM64_REG_X1, &authenticated_pointer));
+    TEST_CHECK((authenticated_pointer & pac_mask) == 0); // signed pointer is valid
+
+    uint64_t diversifier = 1337;
+    OK(uc_reg_write(uc, UC_ARM64_REG_X1, &signed_pointer));
+    OK(uc_reg_write(uc, UC_ARM64_REG_X0, &diversifier));
+    OK(uc_mem_write(uc, code_start, code_autia_x1_x0, sizeof(code_autia_x1_x0)));
+    OK(uc_emu_start(uc, code_start, code_start + sizeof(code_autia_x1_x0) - 1, 0, 0));
+    authenticated_pointer = 0;
+    OK(uc_reg_read(uc, UC_ARM64_REG_X1, &authenticated_pointer));
+    TEST_CHECK((authenticated_pointer & pac_mask) != 0); // wrong diversifier is invalid
+
+    OK(uc_reg_write(uc, UC_ARM64_REG_X1, &signed_pointer));
+    OK(uc_mem_write(uc, code_start, code_autizb_x1, sizeof(code_autizb_x1)));
+    OK(uc_emu_start(uc, code_start, code_start + sizeof(code_autizb_x1) - 1, 0, 0));
+    authenticated_pointer = 0;
+    OK(uc_reg_read(uc, UC_ARM64_REG_X1, &authenticated_pointer));
+    TEST_CHECK((authenticated_pointer & pac_mask) != 0); // wrong but enabled key is invalid
+
+    OK(uc_reg_write(uc, UC_ARM64_REG_X1, &signed_pointer));
+    OK(uc_mem_write(uc, code_start, code_autdza_x1, sizeof(code_autdza_x1)));
+    OK(uc_emu_start(uc, code_start, code_start + sizeof(code_autdza_x1) - 1, 0, 0));
+    authenticated_pointer = 0;
+    OK(uc_reg_read(uc, UC_ARM64_REG_X1, &authenticated_pointer));
+    TEST_CHECK((authenticated_pointer & pac_mask) != 0); // disabled but same value key is invalid
+
+    OK(uc_close(uc));
+}
+
+static void test_arm64_pauth_ctl(void)
+{
+    // PAuth test for the uc_ctl interfaces.
+
+    uc_engine *uc;
+    const char code_paciza_x1[] = "\xe1\x23\xc1\xda"; // paciza x1
+
+    // We expect a PAC added somewhere in pac_mask bits in order to make the
+    // test agnostic of TxSZ and TBI.
+
+    const uint64_t some_unsigned_pointer = 0x0000aaaabbbbccccULL;
+    const uint64_t pac_mask = 0xffff000000000000ULL & ~(1ULL << 55);
+
+    OK(uc_open(UC_ARCH_ARM64, UC_MODE_ARM, &uc));
+    OK(uc_ctl_set_cpu_model(uc, UC_CPU_ARM64_MAX));
+    OK(uc_mem_map(uc, code_start, code_len, UC_PROT_ALL));
+
+    test_arm64_pauth_check_cpu_feat(uc);
+    test_arm64_pauth_setup(uc, SCTLR_EL1_EnIA | SCTLR_EL1_EnIB);
+
+    // Verify that paciza and uc_ctl_pauth_sign() result in the same signed
+    // pointer.
+
+    OK(uc_mem_write(uc, code_start, code_paciza_x1, sizeof(code_paciza_x1)));
+    OK(uc_reg_write(uc, UC_ARM64_REG_X1, &some_unsigned_pointer));
+    OK(uc_emu_start(uc, code_start, code_start + sizeof(code_paciza_x1) - 1, 0, 0));
+    uint64_t signed_pointer_paciza = 0;
+    OK(uc_reg_read(uc, UC_ARM64_REG_X1, &signed_pointer_paciza));
+    TEST_CHECK(signed_pointer_paciza != some_unsigned_pointer);
+    TEST_CHECK((signed_pointer_paciza & pac_mask) != 0);
+
+    uint64_t signed_pointer = 0;
+    OK(uc_ctl_pauth_sign(uc, some_unsigned_pointer, UC_ARM64_PAUTH_KEY_IA, 0, &signed_pointer));
+    TEST_CHECK(signed_pointer == signed_pointer_paciza);
+
+    // Verify that stripping the PAC results in the original pointer.
+
+    uint64_t stripped_pointer = 0;
+    OK(uc_ctl_pauth_strip(uc, signed_pointer, UC_ARM64_PAUTH_KEY_IA, &stripped_pointer));
+    TEST_CHECK(stripped_pointer == some_unsigned_pointer);
+
+    // Verify that authenticating works as expected.
+
+    bool valid = true;
+    OK(uc_ctl_pauth_auth(uc, some_unsigned_pointer, UC_ARM64_PAUTH_KEY_IA, 0, &valid));
+    TEST_CHECK(!valid); // unsigned pointer
+    valid = false;
+    OK(uc_ctl_pauth_auth(uc, signed_pointer, UC_ARM64_PAUTH_KEY_IA, 0, &valid));
+    TEST_CHECK(valid);  // signed pointer
+    valid = true;
+    OK(uc_ctl_pauth_auth(uc, signed_pointer, UC_ARM64_PAUTH_KEY_IA, 1337, &valid));
+    TEST_CHECK(!valid); // wrong diversifier
+    valid = true;
+    OK(uc_ctl_pauth_auth(uc, signed_pointer, UC_ARM64_PAUTH_KEY_IB, 0, &valid));
+    TEST_CHECK(!valid); // wrong but enabled key
+    valid = true;
+    OK(uc_ctl_pauth_auth(uc, signed_pointer, UC_ARM64_PAUTH_KEY_DA, 0, &valid));
+    TEST_CHECK(!valid); // disabled but same value key
+
+    OK(uc_close(uc));
+}
+
 TEST_LIST = {{"test_arm64_until", test_arm64_until},
              {"test_arm64_code_patching", test_arm64_code_patching},
              {"test_arm64_code_patching_count", test_arm64_code_patching_count},
-             {"test_arm64_v8_pac", test_arm64_v8_pac},
+             {"test_arm64_v8_cas", test_arm64_v8_cas},
              {"test_arm64_read_sctlr", test_arm64_read_sctlr},
-             {"test_arm64_mrs_hook", test_arm64_mrs_hook},
+             {"test_arm64_hook_insn_mrs", test_arm64_hook_insn_mrs},
+             {"test_arm64_hook_insn_wfi", test_arm64_hook_insn_wfi},
              {"test_arm64_correct_address_in_small_jump_hook",
               test_arm64_correct_address_in_small_jump_hook},
              {"test_arm64_correct_address_in_long_jump_hook",
@@ -683,4 +963,6 @@ TEST_LIST = {{"test_arm64_until", test_arm64_until},
              {"test_arm64_mem_prot_regress", test_arm64_mem_prot_regress},
              {"test_arm64_mem_hook_read_write", test_arm64_mem_hook_read_write},
              {"test_arm64_pc_guarantee", test_arm64_pc_guarantee},
+             {"test_arm64_pauth_vanilla", test_arm64_pauth_vanilla},
+             {"test_arm64_pauth_ctl", test_arm64_pauth_ctl},
              {NULL, NULL}};

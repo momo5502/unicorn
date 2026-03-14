@@ -72,7 +72,7 @@ typedef size_t uc_hook;
 // Unicorn API version
 #define UC_API_MAJOR 2
 #define UC_API_MINOR 1
-#define UC_API_PATCH 3
+#define UC_API_PATCH 4
 // Release candidate version, 255 means the official release.
 #define UC_API_EXTRA 255
 
@@ -193,6 +193,9 @@ typedef enum uc_err {
     UC_ERR_RESOURCE,        // Insufficient resource: uc_emu_start()
     UC_ERR_EXCEPTION,       // Unhandled CPU exception
     UC_ERR_OVERFLOW,        // Provided buffer is not large enough: uc_reg_*2()
+    UC_ERR_MMU_READ,        // The tlb_fill hook returned false for a read access (see tlb_fill hook)
+    UC_ERR_MMU_WRITE,       // The tlb_fill hook returned false for a write operation (see tlb_fill hook)
+    UC_ERR_MMU_FETCH,       // The tlb_fill hook returned false for a fetch (see tlb_fill hook)
 } uc_err;
 
 /*
@@ -605,6 +608,49 @@ typedef enum uc_control_type {
     // controle if context_save/restore should work with snapshots
     // Write: @args = (int)
     UC_CTL_CONTEXT_MODE,
+
+    // Sign a pointer with a given architecture-specific key and a diversifier
+    // (also known as modifier, extra data, discriminator, tweak or salt).  If
+    // the key is currently disabled, the operation returns the unsigned ptr.
+    // ABI-specific string hashing or address blending is up to the caller to
+    // implement.
+    //
+    // Pointer authentication needs to have been set up properly beforehand.
+    // Depending on architecture, current CPU state may determine pointer
+    // layout and other aspects of the operation not explicitly specified as
+    // parameters.
+    //
+    // Read/write: @args = (uint64_t ptr, int key, uint64_t diversifier,
+    //                      uint64_t *signed_ptr)
+    UC_CTL_PAUTH_SIGN,
+
+    // Strip a possibly signed pointer of all PAC bits without authenticating,
+    // returning an unsigned pointer.
+    //
+    // Pointer authentication needs to have been set up properly beforehand.
+    // Depending on architecture, current CPU state may determine pointer
+    // layout and other aspects of the operation not explicitly specified as
+    // parameters.
+    //
+    // Read/write: @args = (uint64_t ptr, int key, uint64_t *stripped_ptr)
+    UC_CTL_PAUTH_STRIP,
+
+    // Authenticate a signed pointer with a given architecture-specific key and
+    // diversifier (also known as modifier, extra data, discriminator, tweak or
+    // salt).  ABI-specific string hashing or address blending is up to the
+    // caller to implement.
+    //
+    // Pointer authentication needs to have been set up properly beforehand.
+    // Depending on architecture, current CPU state may determine pointer
+    // layout and other aspects of the operation not explicitly specified as
+    // parameters.
+    //
+    // Read/write: @args = (uint64_t ptr, int key, uint64_t diversifier,
+    //                      bool *valid)
+    UC_CTL_PAUTH_AUTH,
+    // read the invalid_addr after an error
+    // Read: @args = (uint64_t*)
+    UC_CTL_INVALID_ADDR,
 } uc_control_type;
 
 /*
@@ -688,6 +734,14 @@ See sample_ctl.c for a detailed example.
     uc_ctl(uc, UC_CTL_WRITE(UC_CTL_TCG_BUFFER_SIZE, 1), (size))
 #define uc_ctl_context_mode(uc, mode)                                          \
     uc_ctl(uc, UC_CTL_WRITE(UC_CTL_CONTEXT_MODE, 1), (mode))
+#define uc_ctl_pauth_sign(uc, ptr, key, diversifier, signed_ptr)               \
+    uc_ctl(uc, UC_CTL_READ_WRITE(UC_CTL_PAUTH_SIGN, 4), (uint64_t)(ptr), (int)(key), (uint64_t)(diversifier), (uint64_t *)(signed_ptr))
+#define uc_ctl_pauth_strip(uc, ptr, key, stripped_ptr)                         \
+    uc_ctl(uc, UC_CTL_READ_WRITE(UC_CTL_PAUTH_STRIP, 3), (uint64_t)(ptr), (int)(key), (uint64_t *)(stripped_ptr))
+#define uc_ctl_pauth_auth(uc, ptr, key, diversifier, valid)                    \
+    uc_ctl(uc, UC_CTL_READ_WRITE(UC_CTL_PAUTH_AUTH, 4), (uint64_t)(ptr), (int)(key), (uint64_t)(diversifier), (uint64_t *)(valid))
+#define uc_ctl_get_invalid_addr(uc, addr)                                    \
+    uc_ctl(uc, UC_CTL_READ(UC_CTL_INVALID_ADDR, 1), (addr))
 
 // Opaque storage for CPU context, used with uc_context_*()
 struct uc_context;
@@ -1003,7 +1057,7 @@ uc_err uc_vmem_read(uc_engine *uc, uint64_t address, uc_prot prot,
 */
 UNICORN_EXPORT
 uc_err uc_vmem_write(uc_engine *uc, uint64_t address, uc_prot prot,
-                           void *bytes, size_t size);
+                           const void *bytes, size_t size);
 
 /*
  Translate a virtuall address to a physical address
@@ -1102,6 +1156,22 @@ uc_err uc_hook_add(uc_engine *uc, uc_hook *hh, int type, void *callback,
 */
 UNICORN_EXPORT
 uc_err uc_hook_del(uc_engine *uc, uc_hook hh);
+
+/*
+ change the user data from a hook callback.
+ This change the user-defined data for a given hook.
+ NOTE: It's undefinde behavior when called on a hook which was not initialized
+ by uc_hook_add or deleted by uc_hook_delete
+ @uc: handle returned by uc_open()
+ @hh: handle returned by uc_hook_add()
+ @user_data: user-defined data. This will be passed to callback function in its
+      last argument @user_data
+
+ @return UC_ERR_OK on success, or UC_ERR_ARG when the hook was block or code
+ hook and emulation is runnings
+*/
+UNICORN_EXPORT
+uc_err uc_hook_set_user_data(uc_engine *uc, uc_hook hh, void *user_data);
 
 /*
  Variables to control which state should be stored in the context.

@@ -157,6 +157,11 @@ typedef uc_tcg_flush_tlb uc_tb_flush_t;
 
 typedef uc_err (*uc_set_tlb_t)(struct uc_struct *uc, int mode);
 
+// PAuth sign and strip
+typedef uc_err (*uc_pauth_sign_t)(struct uc_struct *uc, uint64_t ptr, int key, uint64_t diversifier, uint64_t *signed_ptr);
+typedef uc_err (*uc_pauth_strip_t)(struct uc_struct *uc, uint64_t ptr, int key, uint64_t *stripped_ptr);
+typedef uc_err (*uc_pauth_auth_t)(struct uc_struct *uc, uint64_t ptr, int key, uint64_t diversifier, bool *valid);
+
 struct hook {
     int type;       // UC_HOOK_*
     int insn;       // instruction for HOOK_INSN
@@ -313,6 +318,9 @@ struct uc_struct {
     uc_tb_flush_t tb_flush;
     uc_add_inline_hook_t add_inline_hook;
     uc_del_inline_hook_t del_inline_hook;
+    uc_pauth_sign_t pauth_sign;
+    uc_pauth_strip_t pauth_strip;
+    uc_pauth_auth_t pauth_auth;
 
     uc_context_size_t context_size;
     uc_context_save_t context_save;

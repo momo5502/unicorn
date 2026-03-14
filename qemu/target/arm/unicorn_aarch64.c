@@ -440,6 +440,88 @@ static int arm64_cpus_init(struct uc_struct *uc, const char *cpu_model)
     return 0;
 }
 
+static bool arm64_insn_hook_validate(uint32_t insn_enum)
+{
+    if (insn_enum != UC_ARM64_INS_WFI && insn_enum != UC_ARM64_INS_MRS &&
+        insn_enum != UC_ARM64_INS_MSR && insn_enum != UC_ARM64_INS_SYS &&
+        insn_enum != UC_ARM64_INS_SYSL) {
+        return false;
+    }
+    return true;
+}
+
+uint64_t _uc_pauth_sign(CPUARMState *env, uint64_t ptr, uint64_t diversifier, uint32_t sctlr_bit, ARMPACKey *key, bool data);
+uint64_t _uc_pauth_sign_ga(CPUARMState *env, uint64_t ptr, uint64_t diversifier);
+uint64_t _uc_pauth_strip(CPUARMState *env, uint64_t ptr, bool data);
+bool _uc_pauth_auth(CPUARMState *env, uint64_t ptr, uint64_t diversifier, uint32_t sctlr_bit, ARMPACKey *key, bool data);
+
+static uc_err arm64_pauth_sign(struct uc_struct *uc, uint64_t ptr, int key, uint64_t diversifier, uint64_t *signed_ptr)
+{
+    CPUArchState *env = uc->cpu->env_ptr;
+    switch (key) {
+        case UC_ARM64_PAUTH_KEY_IA:
+            *signed_ptr = _uc_pauth_sign(env, ptr, diversifier, SCTLR_EnIA, &env->keys.apia, false);
+            break;
+        case UC_ARM64_PAUTH_KEY_IB:
+            *signed_ptr = _uc_pauth_sign(env, ptr, diversifier, SCTLR_EnIB, &env->keys.apib, false);
+            break;
+        case UC_ARM64_PAUTH_KEY_DA:
+            *signed_ptr = _uc_pauth_sign(env, ptr, diversifier, SCTLR_EnDA, &env->keys.apda, true);
+            break;
+        case UC_ARM64_PAUTH_KEY_DB:
+            *signed_ptr = _uc_pauth_sign(env, ptr, diversifier, SCTLR_EnDB, &env->keys.apdb, true);
+            break;
+        case UC_ARM64_PAUTH_KEY_GA:
+            *signed_ptr = _uc_pauth_sign_ga(env, ptr, diversifier);
+            break;
+        default:
+            return UC_ERR_ARG;
+    }
+    return UC_ERR_OK;
+}
+
+static uc_err arm64_pauth_strip(struct uc_struct *uc, uint64_t ptr, int key, uint64_t *stripped_ptr)
+{
+    CPUArchState *env = uc->cpu->env_ptr;
+    switch (key) {
+        case UC_ARM64_PAUTH_KEY_IA:
+        case UC_ARM64_PAUTH_KEY_IB:
+            *stripped_ptr = _uc_pauth_strip(env, ptr, false);
+            break;
+        case UC_ARM64_PAUTH_KEY_DA:
+        case UC_ARM64_PAUTH_KEY_DB:
+            *stripped_ptr = _uc_pauth_strip(env, ptr, true);
+            break;
+        case UC_ARM64_PAUTH_KEY_GA:
+        default:
+            return UC_ERR_ARG;
+    }
+    return UC_ERR_OK;
+}
+
+static uc_err arm64_pauth_auth(struct uc_struct *uc, uint64_t ptr, int key, uint64_t diversifier, bool *valid)
+{
+    CPUArchState *env = uc->cpu->env_ptr;
+    switch (key) {
+        case UC_ARM64_PAUTH_KEY_IA:
+            *valid = _uc_pauth_auth(env, ptr, diversifier, SCTLR_EnIA, &env->keys.apia, false);
+            break;
+        case UC_ARM64_PAUTH_KEY_IB:
+            *valid = _uc_pauth_auth(env, ptr, diversifier, SCTLR_EnIB, &env->keys.apib, false);
+            break;
+        case UC_ARM64_PAUTH_KEY_DA:
+            *valid = _uc_pauth_auth(env, ptr, diversifier, SCTLR_EnDA, &env->keys.apda, true);
+            break;
+        case UC_ARM64_PAUTH_KEY_DB:
+            *valid = _uc_pauth_auth(env, ptr, diversifier, SCTLR_EnDB, &env->keys.apdb, true);
+            break;
+        case UC_ARM64_PAUTH_KEY_GA:
+        default:
+            return UC_ERR_ARG;
+    }
+    return UC_ERR_OK;
+}
+
 DEFAULT_VISIBILITY
 void uc_init(struct uc_struct *uc)
 {
@@ -450,6 +532,10 @@ void uc_init(struct uc_struct *uc)
     uc->get_pc = arm64_get_pc;
     uc->release = arm64_release;
     uc->cpus_init = arm64_cpus_init;
+    uc->insn_hook_validate = arm64_insn_hook_validate;
     uc->cpu_context_size = offsetof(CPUARMState, cpu_watchpoint);
+    uc->pauth_sign = arm64_pauth_sign;
+    uc->pauth_strip = arm64_pauth_strip;
+    uc->pauth_auth = arm64_pauth_auth;
     uc_common_init(uc);
 }

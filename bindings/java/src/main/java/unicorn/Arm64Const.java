@@ -334,6 +334,16 @@ public interface Arm64Const {
     public static final int UC_ARM64_INS_MSR = 2;
     public static final int UC_ARM64_INS_SYS = 3;
     public static final int UC_ARM64_INS_SYSL = 4;
-    public static final int UC_ARM64_INS_ENDING = 5;
+    public static final int UC_ARM64_INS_WFI = 5;
+    public static final int UC_ARM64_INS_ENDING = 6;
+
+    // ARM64 PAuth keys
+
+    public static final int UC_ARM64_PAUTH_KEY_IA = 0;
+    public static final int UC_ARM64_PAUTH_KEY_IB = 1;
+    public static final int UC_ARM64_PAUTH_KEY_DA = 2;
+    public static final int UC_ARM64_PAUTH_KEY_DB = 3;
+    public static final int UC_ARM64_PAUTH_KEY_GA = 4;
+    public static final int UC_ARM64_PAUTH_KEY_ENDING = 5;
 
 }

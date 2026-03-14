@@ -81,3 +81,4 @@ Ziqiao Kong (lazymio): uc_context_free() API and various bug fix & improvement.
 Sven Almgren (blindmatrix): bug fix
 Chenxu Wu (kabeor): Documentation
 Philipp Takacs: virtual tlb, memory snapshots
+Daniel Roethlisberger (droe): PAuth ctl, various ARM/ARM64/Python bug fixes and perf

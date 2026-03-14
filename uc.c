@@ -191,6 +191,12 @@ const char *uc_strerror(uc_err code)
         return "Unhandled CPU exception (UC_ERR_EXCEPTION)";
     case UC_ERR_OVERFLOW:
         return "Provided buffer is too small (UC_ERR_OVERFLOW)";
+    case UC_ERR_MMU_READ:
+        return "The tlb_fill hook returned false for a read (UC_ERR_MMU_READ)";
+    case UC_ERR_MMU_WRITE:
+        return "The tlb_fill hook returned false for a write (UC_ERR_MMU_WRITE)";
+    case UC_ERR_MMU_FETCH:
+        return "The tlb_fill hook returned false for a fetch (UC_ERR_MMU_FETCH)";
     }
 }
 
@@ -860,10 +866,10 @@ uc_err uc_vmem_read(uc_engine *uc, uint64_t address, uc_prot prot,
 
 UNICORN_EXPORT
 uc_err uc_vmem_write(uc_engine *uc, uint64_t address, uc_prot prot,
-                           void *_bytes, size_t size)
+                           const void *_bytes, size_t size)
 {
     size_t count = 0, len;
-    uint8_t *bytes = _bytes;
+    const uint8_t *bytes = _bytes;
     uint64_t align;
     uint64_t pagesize;
     uint64_t paddr = 0;
@@ -2060,6 +2066,24 @@ uc_err uc_hook_del(uc_engine *uc, uc_hook hh)
     return UC_ERR_OK;
 }
 
+UNICORN_EXPORT
+uc_err uc_hook_set_user_data(uc_engine *uc, uc_hook hh, void *user_data)
+{
+    struct hook *hook = (struct hook *)hh;
+    if (hook->type == UC_HOOK_BLOCK || hook->type == UC_HOOK_CODE) {
+        if (uc->nested_level) {
+            return UC_ERR_ARG;
+        }
+        if (hook->end < hook->begin) {
+            uc->tb_flush(uc);
+        } else {
+            uc->uc_invalidate_tb(uc, hook->begin, hook->end - hook->begin);
+        }
+    }
+    hook->user_data = user_data;
+    return UC_ERR_OK;
+}
+
 // TCG helper
 // 2 arguments are enough for most opcodes. Load/Store needs 3 arguments but we
 // have memory hooks already. We may exceed the maximum arguments of a tcg
@@ -2975,6 +2999,79 @@ uc_err uc_ctl(uc_engine *uc, uc_control_type control, ...)
         }
 
         restore_jit_state(uc);
+        break;
+
+    case UC_CTL_PAUTH_SIGN: {
+
+        UC_INIT(uc);
+
+        if (rw == UC_CTL_IO_READ_WRITE) {
+            uint64_t ptr = va_arg(args, uint64_t);
+            int key = va_arg(args, int);
+            uint64_t diversifier = va_arg(args, uint64_t);
+            uint64_t *signed_ptr = va_arg(args, uint64_t *);
+            if (uc->pauth_sign != NULL) {
+                err = uc->pauth_sign(uc, ptr, key, diversifier, signed_ptr);
+            } else {
+                err = UC_ERR_ARG;
+            }
+        } else {
+            err = UC_ERR_ARG;
+        }
+
+        restore_jit_state(uc);
+        break;
+    }
+
+    case UC_CTL_PAUTH_STRIP: {
+
+        UC_INIT(uc);
+
+        if (rw == UC_CTL_IO_READ_WRITE) {
+            uint64_t ptr = va_arg(args, uint64_t);
+            int key = va_arg(args, int);
+            uint64_t *stripped_ptr = va_arg(args, uint64_t *);
+            if (uc->pauth_strip != NULL) {
+                err = uc->pauth_strip(uc, ptr, key, stripped_ptr);
+            } else {
+                err = UC_ERR_ARG;
+            }
+        } else {
+            err = UC_ERR_ARG;
+        }
+
+        restore_jit_state(uc);
+        break;
+    }
+
+    case UC_CTL_PAUTH_AUTH: {
+
+        UC_INIT(uc);
+
+        if (rw == UC_CTL_IO_READ_WRITE) {
+            uint64_t ptr = va_arg(args, uint64_t);
+            int key = va_arg(args, int);
+            uint64_t diversifier = va_arg(args, uint64_t);
+            bool *valid = va_arg(args, bool *);
+            if (uc->pauth_auth != NULL) {
+                err = uc->pauth_auth(uc, ptr, key, diversifier, valid);
+            } else {
+                err = UC_ERR_ARG;
+            }
+        } else {
+            err = UC_ERR_ARG;
+        }
+
+        restore_jit_state(uc);
+        break;
+    }
+    case UC_CTL_INVALID_ADDR:
+        if (rw == UC_CTL_IO_READ) {
+            uint64_t *invalid_addr = va_arg(args, uint64_t *);
+            *invalid_addr = uc->invalid_addr;
+        } else {
+            err = UC_ERR_ARG;
+        }
         break;
 
     default:
