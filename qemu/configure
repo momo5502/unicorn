@@ -2157,7 +2157,10 @@ fi
 if [ "$darwin" = "yes" ] ; then
   cat > $TMPC << EOF
 #include <pthread.h>
-int main() { pthread_jit_write_protect_np(0); return 0;}
+int main() {
+    pthread_jit_write_protect_np(0);
+    return pthread_jit_write_protect_supported_np();
+}
 EOF
   if ! compile_prog ""; then
     have_pthread_jit_protect='no'
@@ -2174,20 +2177,13 @@ int main() {
     __asm__ __volatile__("isb sy\n"
                           "mrs %0, S3_6_c15_c1_5\n"
                           : "=r"(v)::"memory");
-    // In Apple Hypervisor virtualized environment (EL1), this value is not accessbile
-    // but pthread_jit_write_protect_np essentially is a no-op.
     return 0;
 }
 EOF
     if ! compile_prog ""; then
       have_sprr_mrs='no'
     else
-      $TMPE
-      if [ $? -eq 0 ]; then
-        have_sprr_mrs='yes'
-      else
-        have_sprr_mrs='no'
-      fi
+      have_sprr_mrs='yes'
     fi
   fi
 fi
