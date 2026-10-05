@@ -510,6 +510,8 @@ uc_err uc_close(uc_engine *uc)
         return UC_ERR_OK;
     }
 
+    save_jit_state(uc);
+
     // Flush all translation buffers or we leak memory allocated by MMU
     uc->tb_flush(uc);
 
@@ -572,6 +574,8 @@ uc_err uc_close(uc_engine *uc)
     free(uc->mapped_blocks);
 
     g_tree_destroy(uc->ctl_exits);
+
+    restore_jit_state(uc);
 
     // finally, free uc itself.
     memset(uc, 0, sizeof(*uc));

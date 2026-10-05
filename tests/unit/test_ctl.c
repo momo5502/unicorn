@@ -2,6 +2,11 @@
 #include <time.h>
 #include <string.h>
 
+#if defined(__APPLE__) && defined(HAVE_PTHREAD_JIT_PROTECT) && defined(__aarch64__)
+#include <pthread.h>
+#include <libkern/OSCacheControl.h>
+#endif
+
 // We have to copy this for Android.
 #ifdef _WIN32
 
@@ -398,7 +403,70 @@ static void test_noexec(void)
     OK(uc_close(uc));
 }
 
+#if defined(__APPLE__) && defined(HAVE_PTHREAD_JIT_PROTECT) && defined(__aarch64__)
+static void check_jit_caller_state(void *buffer, bool executable)
+{
+    if (executable) {
+        int (*function)(void) = buffer;
+        TEST_CHECK(function() == 42);
+    } else {
+        *(volatile uint32_t *)buffer = 0x52800540; // mov w0, #42
+    }
+}
+
+static void test_uc_jit_state(bool executable)
+{
+    const uint32_t native_code[] = {0x52800540, 0xd65f03c0}; // mov w0, #42; ret
+    const char guest_code[] = "\x48\xff\xc0"; // inc rax
+    const size_t buffer_size = 0x4000;
+    void *buffer = mmap(NULL, buffer_size, PROT_READ | PROT_WRITE | PROT_EXEC,
+                        MAP_PRIVATE | MAP_ANONYMOUS | MAP_JIT, -1, 0);
+    TEST_ASSERT(buffer != MAP_FAILED);
+    pthread_jit_write_protect_np(0);
+    memcpy(buffer, native_code, sizeof(native_code));
+    sys_icache_invalidate(buffer, sizeof(native_code));
+    pthread_jit_write_protect_np(executable);
+
+    uc_engine *uc;
+    uint64_t rax = 0;
+    OK(uc_open(UC_ARCH_X86, UC_MODE_64, &uc));
+    OK(uc_ctl_set_tcg_buffer_size(uc, 0x100000));
+    OK(uc_reg_read(uc, UC_X86_REG_RAX, &rax));
+    check_jit_caller_state(buffer, executable);
+    OK(uc_mem_map(uc, code_start, code_len, UC_PROT_ALL));
+    OK(uc_mem_write(uc, code_start, guest_code, sizeof(guest_code) - 1));
+    check_jit_caller_state(buffer, executable);
+    OK(uc_emu_start(uc, code_start, code_start + sizeof(guest_code) - 1, 0, 0));
+    check_jit_caller_state(buffer, executable);
+    OK(uc_ctl_flush_tb(uc));
+    check_jit_caller_state(buffer, executable);
+    OK(uc_emu_start(uc, code_start, code_start + sizeof(guest_code) - 1, 0, 0));
+    OK(uc_reg_read(uc, UC_X86_REG_RAX, &rax));
+    TEST_CHECK(rax == 2);
+    check_jit_caller_state(buffer, executable);
+    OK(uc_close(uc));
+    check_jit_caller_state(buffer, executable);
+
+    pthread_jit_write_protect_np(1);
+    TEST_CHECK(munmap(buffer, buffer_size) == 0);
+}
+
+static void test_uc_jit_executable_caller(void)
+{
+    test_uc_jit_state(true);
+}
+
+static void test_uc_jit_writable_caller(void)
+{
+    test_uc_jit_state(false);
+}
+#endif
+
 TEST_LIST = {
+#if defined(__APPLE__) && defined(HAVE_PTHREAD_JIT_PROTECT) && defined(__aarch64__)
+    {"test_uc_jit_executable_caller", test_uc_jit_executable_caller},
+    {"test_uc_jit_writable_caller", test_uc_jit_writable_caller},
+#endif
     {"test_uc_ctl_mode", test_uc_ctl_mode},
     {"test_uc_ctl_page_size", test_uc_ctl_page_size},
     {"test_uc_ctl_arch", test_uc_ctl_arch},
