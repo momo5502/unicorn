@@ -19,7 +19,7 @@
 #endif
         
 #define GEN_ADAPTER_DECLARE(name) \
-    uint64_t glue(adapter_helper_, name)(GEN_ADAPTER_ARGS);
+    uint64_t glue(adapter_, HELPER(name))(GEN_ADAPTER_ARGS);
 
 
 

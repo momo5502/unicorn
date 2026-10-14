@@ -84,7 +84,7 @@
     return 0;
 #define GEN_ADAPTER_0_NONVOID(name) return HELPER(name)();
 #define GEN_ADAPTER_0_DEFINE(name, ret)                                        \
-    uint64_t glue(adapter_helper_, name)(GEN_ADAPTER_ARGS)                     \
+    uint64_t glue(adapter_, HELPER(name))(GEN_ADAPTER_ARGS)                     \
     {                                                                          \
         IIF(IS_VOID(ret))(GEN_ADAPTER_0_VOID(name),                            \
                           GEN_ADAPTER_0_NONVOID(name))                         \
@@ -96,7 +96,7 @@
 #define GEN_ADAPTER_1_NONVOID(name, t1)                                        \
     return (uint64_t)HELPER(name)(SELECT_ARG(dh_ctype(t1), A1));
 #define GEN_ADAPTER_1_DEFINE(name, ret, t1)                                    \
-    uint64_t glue(adapter_helper_, name)(GEN_ADAPTER_ARGS)                     \
+    uint64_t glue(adapter_, HELPER(name))(GEN_ADAPTER_ARGS)                     \
     {                                                                          \
         GEN_ADAPTER_ARGS_ARRAY                                                 \
         ASSIGN_ARG(dh_ctype(t1), A1);                                          \
@@ -111,7 +111,7 @@
     return (uint64_t)HELPER(name)(SELECT_ARG(dh_ctype(t1), A1),                \
                                   SELECT_ARG(dh_ctype(t2), A2));
 #define GEN_ADAPTER_2_DEFINE(name, ret, t1, t2)                                \
-    uint64_t glue(adapter_helper_, name)(GEN_ADAPTER_ARGS)                     \
+    uint64_t glue(adapter_, HELPER(name))(GEN_ADAPTER_ARGS)                     \
     {                                                                          \
         GEN_ADAPTER_ARGS_ARRAY                                                 \
         ASSIGN_ARG(dh_ctype(t1), A1);                                          \
@@ -129,7 +129,7 @@
                                   SELECT_ARG(dh_ctype(t2), A2),                \
                                   SELECT_ARG(dh_ctype(t3), A3));
 #define GEN_ADAPTER_3_DEFINE(name, ret, t1, t2, t3)                            \
-    uint64_t glue(adapter_helper_, name)(GEN_ADAPTER_ARGS)                     \
+    uint64_t glue(adapter_, HELPER(name))(GEN_ADAPTER_ARGS)                     \
     {                                                                          \
         GEN_ADAPTER_ARGS_ARRAY                                                 \
         ASSIGN_ARG(dh_ctype(t1), A1);                                          \
@@ -148,7 +148,7 @@
         SELECT_ARG(dh_ctype(t1), A1), SELECT_ARG(dh_ctype(t2), A2),            \
         SELECT_ARG(dh_ctype(t3), A3), SELECT_ARG(dh_ctype(t4), A4));
 #define GEN_ADAPTER_4_DEFINE(name, ret, t1, t2, t3, t4)                        \
-    uint64_t glue(adapter_helper_, name)(GEN_ADAPTER_ARGS)                     \
+    uint64_t glue(adapter_, HELPER(name))(GEN_ADAPTER_ARGS)                     \
     {                                                                          \
         GEN_ADAPTER_ARGS_ARRAY                                                 \
         ASSIGN_ARG(dh_ctype(t1), A1);                                          \
@@ -170,7 +170,7 @@
         SELECT_ARG(dh_ctype(t3), A3), SELECT_ARG(dh_ctype(t4), A4),            \
         SELECT_ARG(dh_ctype(t5), A5));
 #define GEN_ADAPTER_5_DEFINE(name, ret, t1, t2, t3, t4, t5)                    \
-    uint64_t glue(adapter_helper_, name)(GEN_ADAPTER_ARGS)                     \
+    uint64_t glue(adapter_, HELPER(name))(GEN_ADAPTER_ARGS)                     \
     {                                                                          \
         GEN_ADAPTER_ARGS_ARRAY                                                 \
         ASSIGN_ARG(dh_ctype(t1), A1);                                          \
@@ -193,7 +193,7 @@
         SELECT_ARG(dh_ctype(t3), A3), SELECT_ARG(dh_ctype(t4), A4),            \
         SELECT_ARG(dh_ctype(t5), A5), SELECT_ARG(dh_ctype(t6), A6));
 #define GEN_ADAPTER_6_DEFINE(name, ret, t1, t2, t3, t4, t5, t6)                \
-    uint64_t glue(adapter_helper_, name)(GEN_ADAPTER_ARGS)                     \
+    uint64_t glue(adapter_, HELPER(name))(GEN_ADAPTER_ARGS)                     \
     {                                                                          \
         GEN_ADAPTER_ARGS_ARRAY                                                 \
         ASSIGN_ARG(dh_ctype(t1), A1);                                          \
@@ -219,7 +219,7 @@
         SELECT_ARG(dh_ctype(t5), A5), SELECT_ARG(dh_ctype(t6), A6),            \
         SELECT_ARG(dh_ctype(t7), A7));
 #define GEN_ADAPTER_7_DEFINE(name, ret, t1, t2, t3, t4, t5, t6, t7)            \
-    uint64_t glue(adapter_helper_, name)(GEN_ADAPTER_ARGS)                     \
+    uint64_t glue(adapter_, HELPER(name))(GEN_ADAPTER_ARGS)                     \
     {                                                                          \
         GEN_ADAPTER_ARGS_ARRAY                                                 \
         ASSIGN_ARG(dh_ctype(t1), A1);                                          \
