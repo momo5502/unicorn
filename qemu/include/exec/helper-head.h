@@ -20,6 +20,16 @@
 
 #define HELPER(name) glue(helper_, name)
 
+/* Trace helpers are shared, but each target emits its own adapters. */
+#ifdef UNICORN_ARCH_POSTFIX
+#define UC_TRACE_ADAPTER_GLUE_(a, b) a##b
+#define UC_TRACE_ADAPTER_GLUE(a, b) UC_TRACE_ADAPTER_GLUE_(a, b)
+#define adapter_helper_uc_tracecode \
+    UC_TRACE_ADAPTER_GLUE(adapter_tracecode, UNICORN_ARCH_POSTFIX)
+#define adapter_helper_uc_traceopcode \
+    UC_TRACE_ADAPTER_GLUE(adapter_traceopcode, UNICORN_ARCH_POSTFIX)
+#endif
+
 /* Some types that make sense in C, but not for TCG.  */
 #define dh_alias_i32 i32
 #define dh_alias_s32 i32

@@ -12,7 +12,7 @@
     static inline void glue(gen_helper_, name)(TCGContext * tcg_ctx,           \
                                                dh_retvar_decl0(ret))           \
     {                                                                          \
-        tcg_gen_callN(tcg_ctx, glue(adapter_helper_, name), dh_retvar(ret), 0, \
+        tcg_gen_callN(tcg_ctx, glue(adapter_, HELPER(name)), dh_retvar(ret), 0, \
                       NULL);                                                   \
     }
 
@@ -22,7 +22,7 @@
         TCGContext * tcg_ctx, dh_retvar_decl(ret) dh_arg_decl(t1, 1))          \
     {                                                                          \
         TCGTemp *args[1] = {dh_arg(t1, 1)};                                    \
-        tcg_gen_callN(tcg_ctx, glue(adapter_helper_, name), dh_retvar(ret), 1, \
+        tcg_gen_callN(tcg_ctx, glue(adapter_, HELPER(name)), dh_retvar(ret), 1, \
                       args);                                                   \
     }
 
@@ -33,7 +33,7 @@
         dh_arg_decl(t2, 2))                                                    \
     {                                                                          \
         TCGTemp *args[2] = {dh_arg(t1, 1), dh_arg(t2, 2)};                     \
-        tcg_gen_callN(tcg_ctx, glue(adapter_helper_, name), dh_retvar(ret), 2, \
+        tcg_gen_callN(tcg_ctx, glue(adapter_, HELPER(name)), dh_retvar(ret), 2, \
                       args);                                                   \
     }
 
@@ -44,7 +44,7 @@
         dh_arg_decl(t2, 2), dh_arg_decl(t3, 3))                                \
     {                                                                          \
         TCGTemp *args[3] = {dh_arg(t1, 1), dh_arg(t2, 2), dh_arg(t3, 3)};      \
-        tcg_gen_callN(tcg_ctx, glue(adapter_helper_, name), dh_retvar(ret), 3, \
+        tcg_gen_callN(tcg_ctx, glue(adapter_, HELPER(name)), dh_retvar(ret), 3, \
                       args);                                                   \
     }
 
@@ -56,7 +56,7 @@
     {                                                                          \
         TCGTemp *args[4] = {dh_arg(t1, 1), dh_arg(t2, 2), dh_arg(t3, 3),       \
                             dh_arg(t4, 4)};                                    \
-        tcg_gen_callN(tcg_ctx, glue(adapter_helper_, name), dh_retvar(ret), 4, \
+        tcg_gen_callN(tcg_ctx, glue(adapter_, HELPER(name)), dh_retvar(ret), 4, \
                       args);                                                   \
     }
 
@@ -69,7 +69,7 @@
     {                                                                          \
         TCGTemp *args[5] = {dh_arg(t1, 1), dh_arg(t2, 2), dh_arg(t3, 3),       \
                             dh_arg(t4, 4), dh_arg(t5, 5)};                     \
-        tcg_gen_callN(tcg_ctx, glue(adapter_helper_, name), dh_retvar(ret), 5, \
+        tcg_gen_callN(tcg_ctx, glue(adapter_, HELPER(name)), dh_retvar(ret), 5, \
                       args);                                                   \
     }
 
@@ -82,7 +82,7 @@
     {                                                                          \
         TCGTemp *args[6] = {dh_arg(t1, 1), dh_arg(t2, 2), dh_arg(t3, 3),       \
                             dh_arg(t4, 4), dh_arg(t5, 5), dh_arg(t6, 6)};      \
-        tcg_gen_callN(tcg_ctx, glue(adapter_helper_, name), dh_retvar(ret), 6, \
+        tcg_gen_callN(tcg_ctx, glue(adapter_, HELPER(name)), dh_retvar(ret), 6, \
                       args);                                                   \
     }
 
@@ -96,7 +96,7 @@
         TCGTemp *args[7] = {dh_arg(t1, 1), dh_arg(t2, 2), dh_arg(t3, 3),       \
                             dh_arg(t4, 4), dh_arg(t5, 5), dh_arg(t6, 6),       \
                             dh_arg(t7, 7)};                                    \
-        tcg_gen_callN(tcg_ctx, glue(adapter_helper_, name), dh_retvar(ret), 7, \
+        tcg_gen_callN(tcg_ctx, glue(adapter_, HELPER(name)), dh_retvar(ret), 7, \
                       args);                                                   \
     }
 

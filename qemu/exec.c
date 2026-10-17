@@ -719,6 +719,7 @@ static inline bool watchpoint_address_matches(CPUWatchpoint *wp,
 int cpu_watchpoint_address_matches(CPUState *cpu, vaddr addr, vaddr len)
 {
 #if ENABLE_CPU_WATCHPOINTS
+    struct uc_struct *uc = cpu->uc;
     CPUWatchpoint *wp;
     int ret = 0;
 
@@ -1325,7 +1326,13 @@ void cpu_check_watchpoint(CPUState *cpu, vaddr addr, vaddr len,
             cpu->watchpoint_hit = wp;
         }
     }
+#ifdef TARGET_ARM
+    /* ARM's raise_exception_ra() also takes a syndrome and target EL; use the generic exit. */
+    cpu->exception_index = EXCP_DEBUG;
+    cpu_loop_exit_restore(cpu, ra);
+#else
     raise_exception_ra(cpu->env_ptr, EXCP_DEBUG, ra);
+#endif
 #endif
 }
 
